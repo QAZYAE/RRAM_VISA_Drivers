@@ -1,0 +1,240 @@
+"""
+Driver for Keysight 34980A with 1T1R 32x8 measurement scheme
+"""
+import pyvisa 
+from typing import Union
+from Keysight_34980A_modules import Keysight_34922A_70ch_MUX, Keysight_34932A_2x4x16_Matrix
+from VISA_utility import VISA_module
+
+
+
+class Keysight_34980A_1T1R_32x8(VISA_module):
+    """Handles communicating with Keysight 34980A Multifunction Switch/Measure unit for commutating 
+    1T1R 8x32 crossbar arrays.
+    WL and NL channels are connected via matrix module, using Hi and Lo lines. GND_row is used to connect 
+    all unselected WL to GND, SMU_row is used for measurement. BL is connected via one half of the 70ch MUX.
+
+    Attributes:
+        resource (pyvisa.resource): Keysight 34980A Multifunction Switch/Measure Unit resource.
+        sim (bool): True if program is in simulation mode.
+        WLNL (dict): Dictionary of WL-NL channels.
+        BL (dict): Dictionary of BL channels.
+        GND_row (int): Matrix row where GND is connected for grounding unselected WL.
+        SMU_row (int): Matrix row where SMUs are connected for WL and NL measurements.
+        switch_hi_row (int): Row where SMU Hi is connected (one-SMU mode).
+        switch_lo_row (int): Row where SMU Lo is connected (one-SMU mode).
+        switch_BL_col (int): Column where BL is connected (one-SMU mode).
+        switch_NL_col (int): Column where NL is connected (one-SMU mode).
+        MUX (Keysight_34922A_70ch_MUX): object for handling MUX commands (BL). 
+        MAT (Keysight_34932A_2x4x16_Matrix): object for handling Matrix commands (WL and NL).
+    """
+    def __init__(
+        self, 
+        resource: Union[pyvisa.Resource, None], 
+        scheme_data: dict, 
+        one_SMU: bool = False
+    ) -> None:
+        """Handles communicating with Keysight 34980A Multifunction Switch/Measure unit for commutating 
+        1T1R 8x32 crossbar arrays.
+
+        Args:
+            resource (Union[pyvisa.Resource, None]): Keysight 34980A resource
+                (initiate using :meth:`pyvisa.highlevel.ResourceManager.open_resource`).
+                If resource is None, the program simulates communication.
+            scheme_data (dict): "keysight_34980A_scheme" dictionary from options.json 
+            FIXME
+            one_SMU (bool, optional): True for one-SMU mode where BL and NL are connected to Hi/Lo
+                via switch unit. Defaults to False.
+        """
+        self.one_SMU: bool = one_SMU
+        self.WLNL: dict = scheme_data['WLNL_channels']
+        self.BL: dict = scheme_data['BL_channels']
+        self.GND_row: int = scheme_data['GND_row']
+        self.SMU_row: int = scheme_data['SMU_row']
+        self.switch_hi_row: int = scheme_data['Switch_HI_row']
+        self.switch_lo_row: int = scheme_data['Switch_LO_row']
+        self.switch_BL_col: int = scheme_data['Switch_BL_column']
+        self.switch_NL_col: int = scheme_data['Switch_NL_column']
+        self.MUX = Keysight_34922A_70ch_MUX(resource, scheme_data['BL_slot'])
+        self.MAT = Keysight_34932A_2x4x16_Matrix(resource, scheme_data['WLNL_slot'])
+        self.standby()
+        
+        
+    def IDN(self) -> str:
+        """Send SCPI command to identify the instrument and read the responce.
+        
+        Returns:
+            response (str): Instrument response.
+        """
+        if self.sim:
+            return 'Simulation mode'
+        return self.query('*IDN?')
+    
+    
+    def check_instument_connection(self) -> bool:
+        """Check if Keysight 34980A Multifunction Switch/Measure Unit is connected.
+
+        Returns:
+            connected (bool): True if the instrument is connected.
+        """
+        if self.sim:
+            return True
+        response = self.IDN()
+        return response[:28] == 'Agilent Technologies,34980A,'
+    
+    
+    def get_errors(self) -> Union[list, None]:
+        """Get errors from instrument's error queue.
+
+        Returns:
+            errors (list | None): List of erros. Returns None if there are no errors.
+        """
+        if self.sim:
+            return None
+        errors = []
+        flag = True
+        while flag:
+            resp = self.query('system:error?')
+            if resp[:2] == '+0':
+                flag = False
+            elif resp[:10] == 'VISA ERROR':
+                flag = False
+                errors.append(resp)
+            else:
+                errors.append(resp)
+        if len(errors) == 0:
+            return None
+        return errors   
+    
+    
+    def factory_reset(self) -> str:
+        """Perfom a factory reset, which disconnects all connected channels (opens all switches).
+        
+        Returns:
+            response (str): Error if an error occured.
+        """
+        if self.sim:
+            return 'Simulation: Instrument was reset.'
+        write_response = self.write('*RST')[0]
+        if write_response[:10] == 'VISA ERROR':
+            return f'ERROR: {write_response}'
+        return 'Instrument was reset.'
+    
+    
+    def disconnect_all(self) -> str:
+        """Disconnects all MUX channels and Matrix intersections in corresponding modules.
+
+        Returns:
+            response (str): Error if an error occured.
+        """
+        if self.sim:
+            return 'Simulation: All MUX channels and matrix intersections were disconnected'
+        resp_mux = self.MUX.disconnect_all()
+        resp_mat = self.MAT.disconnect_all()
+        for resp in [resp_mat, resp_mux]:
+            if resp.startswith('ERROR'):
+                return resp
+        return 'All MUX channels and matrix intersections were disconnected.'
+    
+    
+    def standby(self) -> str:
+        """Truns on Standby mode:
+            All MUX channels are disconnected.
+            All WL/NL matrix column are connected to the GND row (All WL are grounded).
+
+        Returns:
+            response (str): Error if an error occured.
+        """
+        self.mode = 'standby'
+        if self.sim:
+            return 'Simulation: Switch unit in Standby mode.'
+        resps = []
+        resps.append(self.MUX.disconnect_all())
+        resps.append(self.MAT.disconnect_all_except((self.GND_row, self.SMU_row)))
+        resps.append(self.MAT.configure_row_and_check(self.GND_row,
+                        [True if v in self.WLNL.values() else False for v in range(1, 17)]))
+        resps.append(self.MAT.configure_row_and_check(self.SMU_row, [False for _ in range(16)]))
+        if self.one_SMU:
+            resps.append(self.MAT.configure_row_and_check(self.switch_hi_row, [False for _ in range(16)]))
+            resps.append(self.MAT.configure_row_and_check(self.switch_lo_row, [False for _ in range(16)]))
+        for resp in resps:
+            if resp.startswith('ERROR') or resp.startswith('Exception'):
+                return resp
+        return 'Switch unit in Standby mode.'
+    
+    
+    def connect_cell(self, row: int, column: int, switch_type: str = 'SET') -> str:
+        """Connect crossbar cell in WL row and BL column.
+        WARNING: Channel addresses are 1 through 8 for row and 1 through 32 for column.
+
+        Args:
+            row (int): Row number (Word Line and Net Line): 1 through 8.
+            column (int): Column number (Bit Line): 1 through 32.
+            switch_type (str, optional): Switch type ('SET' or 'RESET'). 
+                Used in one-SMU mode only. Defaults to 'SET'.
+
+        Returns:
+            response (str): Error if an error occured.
+        """
+        self.mode = 'connected'
+        if self.sim:
+            return f'Simulation: Cell {row}-{column} was connected.'
+        if f'WLNL{row}' not in self.WLNL.keys():
+            raise RuntimeError('Wrong WL number')
+        if f'BL{column}' not in self.BL.keys():
+            raise RuntimeError('Wrong BL number')
+        resps = []
+        gnd_list = [True if v in self.WLNL.values() else False for v in range(1, 17)]
+        smu_list = [False for _ in range(16)]
+        gnd_list[self.WLNL[f'WLNL{row}'] - 1] = False
+        smu_list[self.WLNL[f'WLNL{row}'] - 1] = True
+        resps.append(self.MAT.configure_row_and_check(self.GND_row, gnd_list))
+        resps.append(self.MAT.configure_row_and_check(self.SMU_row, smu_list))
+        if self.one_SMU:
+            switch_hi_list = [False for _ in range(16)]
+            switch_lo_list = [False for _ in range(16)]
+            if switch_type == 'SET':
+                switch_hi_list[self.switch_NL_col - 1] = True
+                switch_lo_list[self.switch_BL_col - 1] = True
+            else:
+                switch_hi_list[self.switch_BL_col - 1] = True
+                switch_lo_list[self.switch_NL_col - 1] = True
+            resps.append(self.MAT.configure_row_and_check(self.switch_hi_row, switch_hi_list))
+            resps.append(self.MAT.configure_row_and_check(self.switch_lo_row, switch_lo_list))
+        resps.append(self.MUX.connect_exclusive(self.BL[f'BL{column}']))
+        for resp in resps:
+            if resp.startswith('ERROR') or resp.startswith('Exception'):
+                self.disconnect_all()
+                return resp + ' | All MUX channels and Matrix intersectrions were disconnected.'
+        return f'Cell {row}-{column} was connected.'
+    
+    
+    def change_switch_type(self, switch_type: str) -> str:
+        """Change switch type. Method is used only in one-SMU mode.
+
+        Args:
+            switch_type (str): New switch type ('SET' or 'RESET').
+
+        Returns:
+            response (str): Error if an error occured.
+        """
+        if not self.one_SMU:
+            return
+        if self.mode == 'standby':
+            return 
+        resps = []
+        switch_hi_list = [False for _ in range(16)]
+        switch_lo_list = [False for _ in range(16)]
+        if switch_type == 'SET':
+            switch_hi_list[self.switch_NL_col - 1] = True
+            switch_lo_list[self.switch_BL_col - 1] = True
+        else:
+            switch_hi_list[self.switch_BL_col - 1] = True
+            switch_lo_list[self.switch_NL_col - 1] = True
+        resps.append(self.MAT.configure_row_and_check(self.switch_hi_row, switch_hi_list))
+        resps.append(self.MAT.configure_row_and_check(self.switch_lo_row, switch_lo_list))
+        for resp in resps:
+            if resp.startswith('ERROR') or resp.startswith('Exception'):
+                self.disconnect_all()
+                return resp + ' | All MUX channels and Matrix intersectrions were disconnected.'
+        return f'The switch type was changed to {switch_type}'

@@ -34,7 +34,7 @@ class VISA_module:
                 Defaults to False.
             
         Returns:
-            list: List of execuded commands or Visa Errors.
+            commands (list): List of execuded commands or Visa Errors.
         """
         if type(commands) is not list:
             commands = [commands]
@@ -59,7 +59,7 @@ class VISA_module:
             command (str): SCPI command.
 
         Returns:
-            str: Instrument response. Returns Visa Error if an exception occured.
+            query_response (str): Instrument response. Returns Visa Error if an exception occured.
         """
         if self.sim:
             return f'Simulation: querying command {command}'
@@ -79,7 +79,7 @@ def twodig(number: int) -> str:
         number (int): number to convert.
 
     Returns:
-        str: converted string.
+        twodig_number (str): converted string.
     """
     if number < 1 or number > 99:
         raise RuntimeError(f'twodig function: wrong number "{number}": it must have 1 or 2 digits.')

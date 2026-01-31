@@ -39,8 +39,8 @@ class Keysight_34922A_70ch_MUX(VISA_module):
             channel (int): Multiplexer channel (1 through 70).
 
         Returns:
-            (bool | str): True if the channel is connected (switch is closed), False if it's open.
-                Returns error string if an error occured.
+            response (bool | str): True if the channel is connected (switch is closed), 
+                False if it's open. Returns error string if an error occured.
         """
         if self.sim:
             return 
@@ -59,7 +59,7 @@ class Keysight_34922A_70ch_MUX(VISA_module):
             channel (int): Multiplexer channel (1 through 70).
 
         Returns:
-            (str | None): SCPI command if it was sent, Visa Error otherwise. None for simulation mode.
+            command (str | None): SCPI command if it was sent, Visa Error otherwise. None for simulation mode.
         """
         if self.sim:
             return 
@@ -75,7 +75,7 @@ class Keysight_34922A_70ch_MUX(VISA_module):
             channel (int): Multiplexer channel (1 through 70).
 
         Returns:
-            str: Write command and query response.
+            query_response (str): Write command and query response.
         """
         if self.sim:
             return f'Simulation: Channel {channel} in slot {self.slot} is connected.'
@@ -97,7 +97,7 @@ class Keysight_34922A_70ch_MUX(VISA_module):
             channel (int): Channel to connect.
 
         Returns:
-            str: Error if an error occured.
+            query_response (str): Error if an error occured.
         """
         if self.sim:
             return f'Simulation: Channel {channel} in slot {self.slot} is connected exclusively.'
@@ -119,7 +119,7 @@ class Keysight_34922A_70ch_MUX(VISA_module):
             channel (int): Multiplexer channel (1 through 70).
 
         Returns:
-            (str | None): SCPI command if it was sent, Visa Error otherwise. None for simulation mode.
+            command (str | None): SCPI command if it was sent, Visa Error otherwise. None for simulation mode.
         """
         if self.sim:
             return 
@@ -135,7 +135,7 @@ class Keysight_34922A_70ch_MUX(VISA_module):
             channel (int): Multiplexer channel (1 through 70).
 
         Returns:
-            query_responce (str): Write command and query responce.
+            query_response (str): Write command and query response.
         """
         if self.sim:
             return f'Simulation: Channel {channel} in slot {self.slot} is disconnected.'
@@ -154,7 +154,7 @@ class Keysight_34922A_70ch_MUX(VISA_module):
         """Disconnect all channels on the multiplexer (open all switches).
 
         Returns:
-            str: Error if an error occured.
+            response (str): Error if an error occured.
         """
         if self.sim:
             return f'Simulation: All channels in slot {self.slot} were disconnected.'
@@ -168,7 +168,7 @@ class Keysight_34922A_70ch_MUX(VISA_module):
         """Check all switches in the multiplexer.
 
         Returns:
-            Union[list, str]: List of boolean variables for each channel (length is 70): True if
+            connection_list (list | str): List of boolean variables for each channel (length is 70): True if
                 channel is connected, False otherwise. Returns error string if an error occured. 
                 Returns None if in simulatioin mode.
         """
@@ -188,7 +188,7 @@ class Keysight_34922A_70ch_MUX(VISA_module):
                 True if channel needs to be connected, False if it needs to be disconnected.
 
         Returns:
-            Union[str, None]: SCPI command if it was sent, Visa Error otherwise. None for simulation mode.
+            command (str | None): SCPI command if it was sent, Visa Error otherwise. None for simulation mode.
         """
         if self.sim:
             return 
@@ -220,7 +220,7 @@ class Keysight_34922A_70ch_MUX(VISA_module):
                 True if intersection needs to be connected, False if it needs to be disconnected.
 
         Returns:
-            str: Message with configuration, if it was successfull. Error if occured. In configuration,
+            response (str): Message with configuration, if it was successfull. Error if occured. In configuration,
                 'C' is written for connected columns, 'D' for disconnected.
         """
         if self.sim:
@@ -253,13 +253,10 @@ class Keysight_34922A_70ch_MUX(VISA_module):
             return f'Multiplexer in slot {self.slot} was configured to |{result} |.'
         except Exception as e:
             return f'Exception occured:{e}'
-            
         
 
 
 
-
-    
 class Keysight_34932A_2x4x16_Matrix(VISA_module):
     """Handles communicating with Keysight 34932A Matrix installed on Keysight 34980A
     Multifunction Switch/Measure Unit.
@@ -292,7 +289,7 @@ class Keysight_34932A_2x4x16_Matrix(VISA_module):
             column (int): Intersection column (1 through 16).
             
         Returns:
-            Union[bool, str]: True if the intersectioin is connected (switch is closed), 
+            connected (bool | str): True if the intersectioin is connected (switch is closed), 
                 False if it's open. Returns error string if an error occured.
         """
         if self.sim:
@@ -313,7 +310,7 @@ class Keysight_34932A_2x4x16_Matrix(VISA_module):
             column (int): Intersection column (1 through 16).
 
         Returns:
-            Union[str, None]: SCPI command if it was sent, Visa Error otherwise. None for simulation mode.
+            command (str | None): SCPI command if it was sent, Visa Error otherwise. None for simulation mode.
         """
         if self.sim:
             return
@@ -330,7 +327,7 @@ class Keysight_34932A_2x4x16_Matrix(VISA_module):
             column (int): Intersection column (1 through 16).
 
         Returns:
-            str: Write command and query response
+            query_response (str): Write command and query response
         """
         if self.sim:
             return f'Simulation: Row {row} and column {column} intersection in slot {self.slot} is connected.'
@@ -353,7 +350,7 @@ class Keysight_34932A_2x4x16_Matrix(VISA_module):
             column (int): Intersection column (1 through 16).
 
         Returns:
-            Union[str, None]: SCPI command if it was sent, Visa Error otherwise. None for simulation mode.
+            command (str | None): SCPI command if it was sent, Visa Error otherwise. None for simulation mode.
         """
         if self.sim:
             return
@@ -370,7 +367,7 @@ class Keysight_34932A_2x4x16_Matrix(VISA_module):
             column (int): Intersection column (1 through 16).
 
         Returns:
-            str: Write command and query response
+            query_response (str): Write command and query response
         """
         if self.sim:
             return f'Simulation: Row {row} and column {column} intersection in slot {self.slot} is ' + \
@@ -390,7 +387,7 @@ class Keysight_34932A_2x4x16_Matrix(VISA_module):
         """Disconnect all intersections in the matrix (open all switches).
 
         Returns:
-            str: Error if an error occured.
+            response (str): Error if an error occured.
         """
         if self.sim:
             return f'Simulation: All matrix intersections in slot {self.slot} were disconnected.'
@@ -408,7 +405,7 @@ class Keysight_34932A_2x4x16_Matrix(VISA_module):
             except_rows (tuple): Tuple of row numbers (int) in which intersections will not be closed.
 
         Returns:
-            str: Error if an error occured.
+            response (str): Error if an error occured.
         """
         if self.sim:
             return f'Simulation: All matrix intersections except rows {except_rows} ' + \
@@ -431,7 +428,7 @@ class Keysight_34932A_2x4x16_Matrix(VISA_module):
             row (int): intersection row (1 through 8).
         
         Returns: 
-            Union[list, str]: List of boolean variables for each column (length is 16): True if
+            connection_list (list | str): List of boolean variables for each column (length is 16): True if
                 intersection with this column is connected, False otherwise. Returns error string if an
                 error occured.
         """
@@ -454,7 +451,7 @@ class Keysight_34932A_2x4x16_Matrix(VISA_module):
                 True if intersection needs to be connected, False if it needs to be disconnected.
 
         Returns:
-            Union[str, None]: SCPI command if it was sent, Visa Error otherwise. None for simulation mode.
+            command (str, None): SCPI command if it was sent, Visa Error otherwise. None for simulation mode.
         """
         if self.sim:
             return 
@@ -491,7 +488,7 @@ class Keysight_34932A_2x4x16_Matrix(VISA_module):
                 True if intersection needs to be connected, False if it needs to be disconnected.
 
         Returns:
-            str: Message with configuration, if it was successfull. Error if occured. In configuration,
+            response (str): Message with configuration, if it was successfull. Error if occured. In configuration,
                 'C' is written for connected columns, 'D' for disconnected.
         """
         if self.sim:

@@ -14,10 +14,16 @@ class VISA_module:
         resource (pyvisa.Resource): Instrument resource.
         sim (bool): True if in Simulation mode.
         module_name (str): Module name for responses.
+        resp (str): Beginning of the response string.
 
     Methods:
         write(commands, stop_exception=True): Send sequence of SCPI commands to the instrument.
         query(command): Send SCPI command and read response.
+        write_resp(command, normal_response): Send an SCPI command to the instrument. 
+            Return normal response or an exception.
+        query_resp(command, sim_resp): Send and SCPI command and read the response. 
+            Returns exception if it occurs.
+        
     """
     def __init__(
         self, 
@@ -86,7 +92,7 @@ class VISA_module:
             self.resource.write(command)
             return f'{self.resp} {normal_response}'
         except Exception as e:
-            return f'ERROR: {self.resp} {f'VISA ERROR:\n\tCommand: "{command}"\n\tVisaIOError: {e}'}'
+            return f'ERROR: {self.resp}\n\t{f'VISA ERROR:\n\tCommand: "{command}"\n\tVisaIOError: {e}'}'
     
     
     def query(self, command: str) -> str:
@@ -103,8 +109,30 @@ class VISA_module:
         try:
             response = self.resource.query(command)
             return response
-        except pyvisa.VisaIOError as error:
-            return f'VISA ERROR:\n\tCommand: "{command}"\n\tVisaIOError: {error}'
+        except Exception as e:
+            return f'VISA ERROR:\n\tCommand: "{command}"\n\tVisaIOError: {e}'
+        
+        
+    def query_resp(self, command: str, sim_resp: str) -> tuple[bool, str]:
+        """Send and SCPI command and read the response. Returns exception if it occurs.
+
+        Args:
+            command (str): SCPI command
+            sim_resp (str): Response for simulation mode.
+
+        Returns:
+            executed, response (tuple[bool, str]): 
+                executed is True if the query was successful.
+                response is sim_resp is in simulation mode, exception if an exception occured
+                    and query_respose if the query was successful.
+        """
+        if self.sim:
+            return False, f'{self.resp} {sim_resp}'
+        try:
+            response = self.resource.query(command)
+            return True, response
+        except Exception as e:
+            return False, f'ERROR: {self.resp}\n\t{f'VISA ERROR:\n\tCommand: "{command}"\n\tVisaIOError: {e}'}'
         
         
         
@@ -116,16 +144,27 @@ class VISA_instrument(VISA_module):
         resource (pyvisa.Resource): Instrument resource.
         sim (bool): True if in Simulation mode.
         IDN_response (str): Valid IDN response for the instrument.
+        instrument_name (str): Instrument name for responses.
+        resp (str): Beginning of the response string.
         
     Methods:
         write(commands, stop_exception=True): Send sequence of SCPI commands to the instrument.
         query(command): Send SCPI command and read response.
+        write_resp(command, normal_response): Send an SCPI command to the instrument. 
+            Return normal response or an exception.
+        query_resp(command, sim_resp): Send and SCPI command and read the response. 
+            Returns exception if it occurs.
         IDN(): Send identification command and read the response.
         check_instrument_connection(): Check the connection and validate the instrument type.
         get_errors(): Get errors from instrument's error queue.
         factory_reset(): Perform a factory reset.
     """
-    def __init__(self, resource: Union[pyvisa.Resource, None], IDN_response: str) -> None:
+    def __init__(
+        self, 
+        resource: Union[pyvisa.Resource, None], 
+        IDN_response: str, 
+        instrument_name: str = 'Instrument'
+    ) -> None:
         """General class for VISA instruments.
 
         Args:
@@ -134,7 +173,8 @@ class VISA_instrument(VISA_module):
                 If resource is None, the program simulates communication.
             IDN_response (str): Instrument response for IDN command (for validation).
         """
-        super().__init__(resource)
+        self.instrument_name = instrument_name
+        super().__init__(resource, instrument_name)
         self.IDN_response: str = IDN_response
         
         

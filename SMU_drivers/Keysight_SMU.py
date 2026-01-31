@@ -48,3 +48,16 @@ class SMU(VISA_module):
         if state.lower() not in ['1', 'on', '0', 'off']:
             return f'ERROR: {self.resp} Invalid state. Valid values: 1|on|0|off (str).'
         return self.write_resp(f':output{self.ch} {state}', f'Output state is set to {state}')
+    
+    
+    def get_output_state(self) -> Union[bool, str]:
+        """Check SMU output state
+
+        Returns:
+            response (bool | str): True if output is on, False if output is off. Exception str 
+                if it occured.
+        """
+        exec, response = self.query_resp(f':output{self.ch}:state?', 'Output state is checked')
+        if exec:
+            return bool(int(response))
+        return response

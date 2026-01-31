@@ -67,4 +67,4 @@ switch.connect_cell(row=3, column=24)  # Ячейка wl=2,bl=23 в GUI
 # SMU module Testing
 if __name__ == '__main__':
     smu = SMU(None, 1, 'inst')
-    print(smu.set_output_state('ON'))
+    print(smu.get_output_state())

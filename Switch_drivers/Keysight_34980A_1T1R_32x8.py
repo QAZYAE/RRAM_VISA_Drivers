@@ -5,18 +5,18 @@ import pyvisa
 import json
 from typing import Union
 from Switch_drivers.Keysight_34980A_modules import Keysight_34922A_70ch_MUX, Keysight_34932A_2x4x16_Matrix
-from VISA_utility import VISA_module
+from VISA_utility import VISA_instrument
 
 
 
-class Keysight_34980A_1T1R_32x8(VISA_module):
+class Keysight_34980A_1T1R_32x8(VISA_instrument):
     """Handles communicating with Keysight 34980A Multifunction Switch/Measure unit for commutating 
     1T1R 8x32 crossbar arrays.
     WL and NL channels are connected via matrix module, using Hi and Lo lines. GND_row is used to connect 
     all unselected WL to GND, SMU_row is used for measurement. BL is connected via one half of the 70ch MUX.
 
     Attributes:
-        resource (pyvisa.resource): Keysight 34980A Multifunction Switch/Measure Unit resource.
+        resource (pyvisa.Resource): Keysight 34980A Multifunction Switch/Measure Unit resource.
         sim (bool): True if program is in simulation mode.
         one_SMU (bool): True if in one-SMU mode where BL and NL are connected to Hi/Lo via switch unit.
         WLNL (dict): Dictionary of WL-NL channels.
@@ -35,14 +35,15 @@ class Keysight_34980A_1T1R_32x8(VISA_module):
         1T1R 8x32 crossbar arrays.
 
         Args:
-            resource (Union[pyvisa.Resource, None]): Keysight 34980A resource
+            resource (pyvisa.Resource | None): Keysight 34980A resource
                 (initiate using :meth:`pyvisa.highlevel.ResourceManager.open_resource`).
                 If resource is None, the program simulates communication.
             config_path (str): Path to the configuration file.
             one_SMU (bool, optional): True for one-SMU mode where BL and NL are connected to Hi/Lo
                 via switch unit. Defaults to False.
         """
-        super().__init__(resource)
+        IDN_response = 'Agilent Technologies,34980A,'
+        super().__init__(resource, IDN_response)
         self.one_SMU: bool = one_SMU
         with open(config_path, 'r', encoding='utf-8') as file:
             scheme_data = json.load(file)
@@ -57,67 +58,6 @@ class Keysight_34980A_1T1R_32x8(VISA_module):
         self.MUX = Keysight_34922A_70ch_MUX(resource, scheme_data['BL_slot'])
         self.MAT = Keysight_34932A_2x4x16_Matrix(resource, scheme_data['WLNL_slot'])
         self.standby()
-        
-        
-    def IDN(self) -> str:
-        """Send SCPI command to identify the instrument and read the responce.
-        
-        Returns:
-            response (str): Instrument response.
-        """
-        if self.sim:
-            return 'Simulation mode'
-        return self.query('*IDN?')
-    
-    
-    def check_instument_connection(self) -> bool:
-        """Check if Keysight 34980A Multifunction Switch/Measure Unit is connected.
-
-        Returns:
-            connected (bool): True if the instrument is connected.
-        """
-        if self.sim:
-            return True
-        response = self.IDN()
-        return response[:28] == 'Agilent Technologies,34980A,'
-    
-    
-    def get_errors(self) -> Union[list, None]:
-        """Get errors from instrument's error queue.
-
-        Returns:
-            errors (list | None): List of erros. Returns None if there are no errors.
-        """
-        if self.sim:
-            return None
-        errors = []
-        flag = True
-        while flag:
-            resp = self.query('system:error?')
-            if resp[:2] == '+0':
-                flag = False
-            elif resp[:10] == 'VISA ERROR':
-                flag = False
-                errors.append(resp)
-            else:
-                errors.append(resp)
-        if len(errors) == 0:
-            return None
-        return errors   
-    
-    
-    def factory_reset(self) -> str:
-        """Perfom a factory reset, which disconnects all connected channels (opens all switches).
-        
-        Returns:
-            response (str): Error if an error occured.
-        """
-        if self.sim:
-            return 'Simulation: Instrument was reset.'
-        write_response = self.write('*RST')[0]
-        if write_response[:10] == 'VISA ERROR':
-            return f'ERROR: {write_response}'
-        return 'Instrument was reset.'
     
     
     def disconnect_all(self) -> str:

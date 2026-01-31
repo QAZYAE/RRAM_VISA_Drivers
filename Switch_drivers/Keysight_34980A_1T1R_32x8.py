@@ -1,9 +1,10 @@
 """
 Driver for Keysight 34980A with 1T1R 32x8 measurement scheme
 """
-import pyvisa 
+import pyvisa
+import json
 from typing import Union
-from Keysight_34980A_modules import Keysight_34922A_70ch_MUX, Keysight_34932A_2x4x16_Matrix
+from Switch_drivers.Keysight_34980A_modules import Keysight_34922A_70ch_MUX, Keysight_34932A_2x4x16_Matrix
 from VISA_utility import VISA_module
 
 
@@ -17,6 +18,7 @@ class Keysight_34980A_1T1R_32x8(VISA_module):
     Attributes:
         resource (pyvisa.resource): Keysight 34980A Multifunction Switch/Measure Unit resource.
         sim (bool): True if program is in simulation mode.
+        one_SMU (bool): True if in one-SMU mode where BL and NL are connected to Hi/Lo via switch unit.
         WLNL (dict): Dictionary of WL-NL channels.
         BL (dict): Dictionary of BL channels.
         GND_row (int): Matrix row where GND is connected for grounding unselected WL.
@@ -28,12 +30,7 @@ class Keysight_34980A_1T1R_32x8(VISA_module):
         MUX (Keysight_34922A_70ch_MUX): object for handling MUX commands (BL). 
         MAT (Keysight_34932A_2x4x16_Matrix): object for handling Matrix commands (WL and NL).
     """
-    def __init__(
-        self, 
-        resource: Union[pyvisa.Resource, None], 
-        scheme_data: dict, 
-        one_SMU: bool = False
-    ) -> None:
+    def __init__(self, resource: Union[pyvisa.Resource, None], config_path: str, one_SMU: bool = False) -> None:
         """Handles communicating with Keysight 34980A Multifunction Switch/Measure unit for commutating 
         1T1R 8x32 crossbar arrays.
 
@@ -41,12 +38,14 @@ class Keysight_34980A_1T1R_32x8(VISA_module):
             resource (Union[pyvisa.Resource, None]): Keysight 34980A resource
                 (initiate using :meth:`pyvisa.highlevel.ResourceManager.open_resource`).
                 If resource is None, the program simulates communication.
-            scheme_data (dict): "keysight_34980A_scheme" dictionary from options.json 
-            FIXME
+            config_path (str): Path to the configuration file.
             one_SMU (bool, optional): True for one-SMU mode where BL and NL are connected to Hi/Lo
                 via switch unit. Defaults to False.
         """
+        super().__init__(resource)
         self.one_SMU: bool = one_SMU
+        with open(config_path, 'r', encoding='utf-8') as file:
+            scheme_data = json.load(file)
         self.WLNL: dict = scheme_data['WLNL_channels']
         self.BL: dict = scheme_data['BL_channels']
         self.GND_row: int = scheme_data['GND_row']

@@ -3,6 +3,7 @@
 """
 import pyvisa
 from Switch_drivers.Keysight_34980A_1T1R_32x8 import Keysight_34980A_1T1R_32x8
+from SMU_drivers.Keysight_SMU import SMU
 
 
 
@@ -57,3 +58,13 @@ switch.connect_cell(row=3, column=24)  # Ячейка wl=2,bl=23 в GUI
 
 # Методы disconnect_all(), standby() и connect_cell() возвращают строки (в т.ч. в режиме симуляции), 
 # описывающие, что произошло. Их можно записывать в логи.
+
+
+
+
+
+
+# SMU module Testing
+if __name__ == '__main__':
+    smu = SMU(None, 1, 'inst')
+    print(smu.set_output_state('ON'))

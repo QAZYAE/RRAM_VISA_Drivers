@@ -225,8 +225,8 @@ class VISA_instrument(VISA_module):
         return errors
     
     
-    def factory_reset(self) -> str:
-        """Perfom a factory reset.
+    def memory_reset(self) -> str:
+        """Resets volatile memory of the instrument.
         
         Returns:
             response (str): Error if an error occured.

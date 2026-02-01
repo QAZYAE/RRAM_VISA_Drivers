@@ -1,5 +1,5 @@
 """
-Drivers for configuring SMU's (Source-Measure Units) on Keysight B2902B
+Driver for configuring SMU's (Source-Measure Units) on Keysight B2902B
 """
 import pyvisa 
 from typing import Union
@@ -29,7 +29,7 @@ class SMU(VISA_module):
                 (initiate using :meth:`pyvisa.highlevel.ResourceManager.open_resource`).
                 If resource is None, the program simulates communication.
             channel (int): Channel number on the instrumetn mainframe.
-            instrument_name (str, optional): Instrument name for responses. Defaults to 'Instruments'.
+            instrument_name (str, optional): Instrument name for responses. Defaults to 'Instrument'.
         """
         if channel < 1 or channel > 8:
             raise RuntimeError('ERROR: wrong channel number. Allowed channel numbers are 1 through 8.')
@@ -191,7 +191,7 @@ class SMU(VISA_module):
         
         
     def get_sense_data(self, latest: bool = False) -> str:
-        """Return the array data, format is specified by B2902B.set_format().
+        """Return the array data, format is specified by B2902B.set_data_format().
         The data is not cleared until the .initiate() method is executed.
 
         Args:
@@ -199,14 +199,14 @@ class SMU(VISA_module):
                 Defaults to False.
 
         Returns:
-            data (str): Data specified by B2902B.set_format().
+            data (str): Data specified by B2902B.set_data_format().
         """
         lat = ':latest' if latest else ''
         flag, response = self.query_resp(f'sense{self.ch}:data{lat}?', 'Getting sense data')
         return response
     
     
-    def fetch_array(self, function: str = '') -> np.ndarray:
+    def fetch_array(self, function: str = '') -> Union[np.ndarray, str]:
         """Returns array data which contains all of the current measurement data.
 
         Args:
@@ -217,7 +217,7 @@ class SMU(VISA_module):
             RuntimeError: Unknown function. Function must be one of the following items:
                 current|resistance|source|status|time|voltage
         Returns:
-            data (np.ndarray): Data array.
+            data (np.ndarray | str): Data array. Returns error if an error occured.
         """
         if function == '':
             func, fresp = '', ''
@@ -227,6 +227,8 @@ class SMU(VISA_module):
                 return f'ERROR: {self.resp} invalid function.'
             func, fresp = f':{function}', f': {function}'
         flag, response = self.query_resp(f'fetch:array{func}? (@{self.ch})', f'Fetching array data{fresp}')
+        if flag:
+            return np.array(response.split(','), dtype=float)
         return response
     
     

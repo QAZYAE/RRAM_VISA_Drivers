@@ -32,7 +32,7 @@ class B2902B(VISA_instrument):
                 If resource is None, the program simulates communication.
             instrument_name (str, optional): Instrument name for responses. Defaults to 'B2902B'.
         """
-        IDN_response = 'Keysight,B2902B,'
+        IDN_response = 'Keysight Technologies,B2902B'
         super().__init__(resource, IDN_response=IDN_response, instrument_name=instrument_name)
         self.SMU1 = SMU(resource, channel=1, instrument_name=instrument_name)
         self.SMU2 = SMU(resource, channel=2, instrument_name=instrument_name)

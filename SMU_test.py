@@ -26,7 +26,6 @@ def main():
     for i in range(1):
         s1.trigger()
         time.sleep(1e-4)
-    print(A.fetch_array('voltage'), A.fetch_array('current'))
     # print(s1.get_sense_data())
     s1.resource.clear()
     # return A.fetch_array('current')

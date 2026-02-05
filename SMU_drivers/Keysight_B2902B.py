@@ -91,6 +91,16 @@ class B2902B(VISA_instrument):
                                f'Data output format is set to {form}')
         
         
+    def get_data_format(self) -> str:
+        """Gets current data format from the instrument.
+
+        Returns:
+            format (str): current data format | error if an error occured. 
+        """
+        return self.query_resp('format:elements:sense?', 
+                               'Getting current data format from the instrument')
+        
+        
     def configure_digital_io_trigger(self, pin: int, function: str) -> str:
         """Configure a pin on the Digital I/O port (D-Sub 25) for trigger input or output.
 
@@ -170,8 +180,29 @@ class B2902B(VISA_instrument):
         return self.write_resp('trigger (@1,2)', 'TRIGGER trigger was sent')
     
     
+    def get_sense_data(self, latest: bool = False) -> Union[tuple[np.ndarray], str]:
+        """Return the array data for both channels, format is specified by B2902B.set_data_format().
+        The data is not cleared until the .initiate() method is executed.
+
+        Args:
+            latest (bool, optional): If True, returns the latest measurement data. 
+                Defaults to False.
+
+        Returns:
+            data (tuple[np.ndarray] | str): Data specified by B2902B.set_data_format().
+                Returns error if an error occured.
+        """
+        lat = ':latest' if latest else ''
+        flag, response = self.query_resp(f'sense1:data{lat}?;sense2:data{lat}?', 'Getting sense data')
+        if flag:
+            s1, s2 = response.split(';')
+            return np.array(s1.split(','), dtype=float), np.array(s2.split(','), dtype=float)
+        return response
+    
+    
     def fetch_array(self, function: str = '') -> Union[tuple[np.ndarray], str]:
         """Returns array data which contains all of the current measurement data.
+        Method works only if the instrument is in idle state.
 
         Args:
             function (str, optional): Function to return: current|resistance|source|status|time|voltage.

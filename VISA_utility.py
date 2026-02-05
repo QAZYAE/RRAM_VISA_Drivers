@@ -239,6 +239,19 @@ class VISA_instrument(VISA_module):
         return 'Instrument was reset.'
     
 
+    def clear(self) -> str:
+        """Clear the resource (VISA method).
+
+        Returns:
+            response (str): Error if an error occured.
+        """
+        try:
+            self.resource.clear()
+            return 'The instrument was cleared'
+        except Exception as e:
+            return f'ERROR:\n\tCommand: "resource.clear()"\n\tVisaIOError: {e}'
+    
+
 
 
 def twodig(number: int) -> str:

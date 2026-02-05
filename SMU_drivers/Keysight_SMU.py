@@ -190,7 +190,7 @@ class SMU(VISA_module):
         )
         
         
-    def get_sense_data(self, latest: bool = False) -> str:
+    def get_sense_data(self, latest: bool = False) -> Union[np.ndarray, str]:
         """Return the array data, format is specified by B2902B.set_data_format().
         The data is not cleared until the .initiate() method is executed.
 
@@ -199,15 +199,19 @@ class SMU(VISA_module):
                 Defaults to False.
 
         Returns:
-            data (str): Data specified by B2902B.set_data_format().
+            data (np.ndarray | str): Data specified by B2902B.set_data_format(). 
+                Returns error if an error occured.
         """
         lat = ':latest' if latest else ''
         flag, response = self.query_resp(f'sense{self.ch}:data{lat}?', 'Getting sense data')
+        if flag:
+            return np.array(response.split(','), dtype=float)
         return response
     
     
     def fetch_array(self, function: str = '') -> Union[np.ndarray, str]:
-        """Returns array data which contains all of the current measurement data.
+        """Returns array data which contains all of the current measurement data. 
+        Method works only if the instrument is in idle state.
 
         Args:
             function (str, optional): Function to return: current|resistance|source|status|time|voltage.

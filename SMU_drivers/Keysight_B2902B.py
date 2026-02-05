@@ -193,7 +193,7 @@ class B2902B(VISA_instrument):
                 Returns error if an error occured.
         """
         lat = ':latest' if latest else ''
-        flag, response = self.query_resp(f'sense1:data{lat}?;sense2:data{lat}?', 'Getting sense data')
+        flag, response = self.query_resp(f'sense1:data{lat}?;:sense2:data{lat}?', 'Getting sense data')
         if flag:
             s1, s2 = response.split(';')
             return np.array(s1.split(','), dtype=float), np.array(s2.split(','), dtype=float)

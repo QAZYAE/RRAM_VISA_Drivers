@@ -345,7 +345,7 @@ class SMU(VISA_module):
         intervals.
 
         Args:
-            interval (float): trigger time interval.
+            interval (float): trigger time interval (seconds). 2e-5 to 1e5 s.
             count (int): trigger count.
             acquire_delay (float, optional): time interval between trigger and measurement start 
                 (seconds). Defaults to 0.

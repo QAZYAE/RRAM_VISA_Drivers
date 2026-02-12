@@ -6,6 +6,7 @@ B2902B должны быть соединены проводом.
 
 import pyvisa 
 import numpy as np
+import time
 from SMU_drivers.Keysight_B2902B import B2902B
 from Switch_drivers.Keysight_34980A_1T1R_32x8 import Keysight_34980A_1T1R_32x8
 
@@ -14,6 +15,12 @@ from Switch_drivers.Keysight_34980A_1T1R_32x8 import Keysight_34980A_1T1R_32x8
 class CID_1T1R_32x8_driver:
     """Driver for measuring 1T1R 32x8 crossbar arrays.
     """
+    trigger_interval: float = 100e-6  # Interval between triggers in seconds
+    trigger_count: int = 0  # Trigger count for current experiment
+    armed: bool = False  # True if instruments measuring at the moment
+    currents_acquired: int = 0  # Number of currents aquired via sense(). Resets on config or clear
+    last_sense: float = 0  # Time of the last sense 
+    
     def __init__(
         self, 
         B2902B_1_address: str, 
@@ -81,6 +88,7 @@ class CID_1T1R_32x8_driver:
             err = inst.get_errors()
             if err is not None:
                 raise ConnectionError(f'Error in {name} error queue: {err}')
+        print('CID_1T1R_32x8 init success')
         
         
     def get_tech_data(self) -> str:
@@ -102,6 +110,9 @@ class CID_1T1R_32x8_driver:
         """
         r1 = self.A.clear()
         r2 = self.B.clear()
+        self.armed = False
+        self.last_sense = 0
+        self.currents_acquired = 0
         if r1.startswith('ERROR') or r2.startswith('ERROR'):
             return False
         return True
@@ -138,8 +149,23 @@ class CID_1T1R_32x8_driver:
             if r.startswith('ERROR'):
                 return False, r
         return True, 'VISA-instruments were disconnected'
-            
+    
+    
+    def standby(self) -> str:
+        """_summary_
+
+        Returns:
+            str: _description_
+        """
         
+        
+    def panic(self) -> str:
+        """_summary_
+
+        Returns:
+            str: _description_
+        """
+            
         
     def sense(self) -> np.ndarray:
         """_summary_
@@ -149,12 +175,90 @@ class CID_1T1R_32x8_driver:
         """
         
         
-    def config(self, task: dict) -> str:
-        """_summary_
+    def config_iv_dc(
+        self, 
+        trigger_interval: float, 
+        v_start: float, 
+        v_stop: float,
+        n_points: int,
+        double: bool,
+        current_compliance: float,
+        sweep_side: str = 'BL'
+    ) -> tuple[bool, str]:
+        """Configure IV_DC mode. WARNING: Method doesn't connect the crossbar cell, 
+        it should be connected via .connect_cell() method.
 
         Args:
-            task (dict): _description_
+            trigger_interval (float): Interval between triggers (seconds).
+            v_start (float): Start voltage (Volts).
+            v_stop (float): Stop voltage (Volts).
+            n_points (int): Number of sweep points in a single direction 
+                (doubled automatically for double IV curve).
+            double (bool): True for double IV curve.
+            current_compliance (float): Current compliance (Amperes).
+            sweep_side (str, optional): Side where sweep voltage is applied: 'BL' or 'NL'.
 
         Returns:
-            str: _description_
+            flag, response (tuple[bool, str]): Good_config_flag (True if instruments were 
+            successfully configured), response or error.
         """
+        # Setting class fields
+        print(trigger_interval, 
+              v_start, 
+              v_stop,
+              n_points,
+              double,
+              current_compliance,
+              sweep_side)
+        if trigger_interval < 100e-6:
+            response = 'WARNING: Too short trigger interval. The interval is set to 100us (min value)\n\t'
+            self.trigger_interval = 100e-6
+        else:
+            response = ''
+            self.trigger_interval = trigger_interval
+        self.trigger_count = 2 * n_points if double else n_points
+        self.currents_acquired = 0
+        resps = []  # Response list
+        # Clearing
+        resps.append(self.A.clear())
+        resps.append(self.B.clear())
+        # Configuring triggers and source shapes
+        for smu in [self.A.SMU1, self.A.SMU2, self.B.SMU1]:
+            resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
+                                               acquire_delay=0.3*self.trigger_interval))
+            resps.append(smu.set_measurement_aperture(aperture=0.5*self.trigger_interval))
+            resps.append(smu.set_source_shape('DC'))
+        # Configuring sweep
+        if sweep_side == 'BL':  # Reset
+            sweep_smu = self.A.SMU1
+            zero_smu = self.A.SMU2
+        elif sweep_side == 'NL':  # Set
+            sweep_smu = self.A.SMU2
+            zero_smu = self.A.SMU1
+        else:
+            return 'ERROR: Wrong sweep_side: valid sides are BL and NL'
+        resps.append(sweep_smu.set_sweep_voltage(stop=v_stop, n_points=n_points, start=v_start, 
+                                                 double=double, current_compliance=current_compliance))
+        resps.append(zero_smu.set_constant_voltage(voltage=0, current_compliance=current_compliance))
+        resps.append(self.B.SMU1.set_constant_voltage(voltage=3.3, current_compliance=current_compliance))
+        # todo: Вынести 3.3 в конфигурацию
+        # Checking if configuration is set
+        bad_config_flag = False
+        for resp in resps:
+            if resp.startswith('ERROR'):
+                response += resp
+                bad_config_flag = True
+        for inst in [self.A, self.B]:
+            err = inst.get_errors()
+            if err is not None:
+                response = ''.join(response, err)
+                bad_config_flag = True
+        if bad_config_flag:
+            return False, response
+        # Start the experiment
+        self.armed = True
+        self.A.initiate()
+        self.B.initiate()
+        self.A.arm()
+        self.last_sense = time.time()
+        return True, response + 'SMU_IV_DC was configured'

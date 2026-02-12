@@ -190,6 +190,47 @@ class SMU(VISA_module):
         )
         
         
+    def set_base_voltage_immediate(self, voltage, current_compliance: float = 100e-3) -> str:
+        """Set base voltage output, applied immediately. WARNING: Voltage is applied on recieving command,
+            not on trigger. Voltage will not turn off after measurements are done, 
+            it should be set to 0 via this method.
+
+        Args:
+            voltage (float): Base voltage (source), Volts.
+            current_compliance (float, optional): Current compliance level, Amperes. Defaults to 300 uA.
+
+        Returns:
+            response (str): Command response | error if an error occured.
+        """
+        return self.write_resp(
+            ';:'.join([f'sense{self.ch}:current:DC:protection:level {current_compliance}',
+                       f'source{self.ch}:voltage:level:immediate {voltage}']),
+            f'Base voltage is set to {voltage}.'
+        )
+        
+        
+    def set_measurement_aperture(self, aperture: float = 0.002, auto: bool = False) -> str:
+        """Sets the integration time for one point measurement.
+
+        Args:
+            aperture (float, optional): Integration time in seconds. 
+                Valid values are from 8e-6 to 2 seconds. Defaults to 2 ms.
+            auto (bool, optional): If True, sets automatic aperture 
+                (ignores aperture parameter). Defaults to False.
+
+        Returns:
+            response (str): Command response | error if an error occured.
+        """
+        if auto:
+            return self.write_resp(f'sense{self.ch}:current:aperture:auto on',
+                                   'Integration time is set to AUTO.')
+        return self.write_resp(
+            ';:'.join([f'sense{self.ch}:cuurent:aperture:auto off',
+                       f'sense{self.ch}:current:aperture {aperture}']),    
+            f'Integration time is set to {aperture} s.'
+        )
+        
+        
     def get_sense_data(self, latest: bool = False) -> Union[np.ndarray, str]:
         """Return the array data, format is specified by B2902B.set_data_format().
         The data is not cleared until the .initiate() method is executed.

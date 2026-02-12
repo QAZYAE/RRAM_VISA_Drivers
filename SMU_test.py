@@ -6,7 +6,6 @@ from Switch_drivers.Keysight_34980A_1T1R_32x8 import Keysight_34980A_1T1R_32x8
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.ticker import (MultipleLocator, MaxNLocator)
-import json
 # import numpy as np
 
 

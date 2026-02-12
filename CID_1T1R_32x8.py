@@ -7,6 +7,7 @@ B2902B должны быть соединены проводом.
 import pyvisa 
 import numpy as np
 import time
+import os
 from RRAM_VISA_Drivers.SMU_drivers import B2902B
 from RRAM_VISA_Drivers.Switch_drivers import Keysight_34980A_1T1R_32x8
 
@@ -20,6 +21,7 @@ class CID_1T1R_32x8_driver:
     armed: bool = False  # True if instruments measuring at the moment
     currents_acquired: int = 0  # Number of currents aquired via sense(). Resets on config or clear
     last_sense: float = 0  # Time of the last sense 
+    sim: str = False  # True for simulation mode
     
     def __init__(
         self, 
@@ -40,21 +42,29 @@ class CID_1T1R_32x8_driver:
             VISA_library_path (str, optional): Path to VISA library. If not provided, 
                 pyvisa tries to find the library on the computer. Defaults to ''.
         """
-        # Creating ResourceManager
-        if VISA_library_path == '':
-            self.rm = pyvisa.ResourceManager()
+        # Check if in simulation mode
+        self.sim = False
+        for address in [B2902B_1_address, B2902B_2_address, Switch_address]:
+            if address is None:
+                self.sim = True
+        if self.sim:
+            A_res, B_res, Switch_res = None, None, None
         else:
-            self.rm = pyvisa.ResourceManager(VISA_library_path)
-        # Opening resources
-        A_res = self.rm.open_resource(B2902B_1_address)
-        B_res = self.rm.open_resource(B2902B_2_address)
-        Switch_res = self.rm.open_resource(Switch_address)
+            # Creating ResourceManager
+            if VISA_library_path == '':
+                self.rm = pyvisa.ResourceManager()
+            else:
+                self.rm = pyvisa.ResourceManager(VISA_library_path)
+            # Opening resources
+            A_res = self.rm.open_resource(B2902B_1_address)
+            B_res = self.rm.open_resource(B2902B_2_address)
+            Switch_res = self.rm.open_resource(Switch_address)
         # Creating driver instances for the instruments
         self.A = B2902B(resource=A_res, instrument_name='B2902B_A')  # Controls BL and NL
         self.B = B2902B(resource=B_res, instrument_name='B2902B_B')  # Controls WL
         self.switch = Keysight_34980A_1T1R_32x8(  # Controls cell selection in crossbar array
             resource=Switch_res, 
-            config_path='config/Keysight_34980A_1T1R_32x8.json'
+            config_path=os.path.join(os.getcwd(), 'RRAM_VISA_Drivers', 'config', 'Keysight_34980A_1T1R_32x8.json')
         )
         # Checking connections and instrument types
         for inst, name in zip([self.A, self.B, self.switch], 
@@ -128,7 +138,7 @@ class CID_1T1R_32x8_driver:
         Returns:
             response (str): Error if an error occured.
         """
-        return self.switch.connect_cell(row=wl+1, col=bl+1)
+        return self.switch.connect_cell(row=wl+1, column=bl+1)
         
         
     def disconnect(self) -> tuple[bool, str]:
@@ -144,7 +154,11 @@ class CID_1T1R_32x8_driver:
         resps.append(self.B.clear())
         resps.append(self.A.set_output_state('off'))
         resps.append(self.B.set_output_state('off'))
-        self.rm.close()
+        if not self.sim:
+            try:
+                self.rm.close()
+            except Exception as e:
+                resps.append('ERROR: ' + str(e))
         for r in resps:
             if r.startswith('ERROR'):
                 return False, r

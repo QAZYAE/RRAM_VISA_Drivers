@@ -245,6 +245,8 @@ class VISA_instrument(VISA_module):
         Returns:
             response (str): Error if an error occured.
         """
+        if self.sim:
+            return 'Simulation: Instrument was cleared.'
         try:
             self.resource.clear()
             return 'The instrument was cleared'

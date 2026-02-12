@@ -4,8 +4,8 @@ Driver for Keysight 34980A with 1T1R 32x8 measurement scheme
 import pyvisa
 import json
 from typing import Union
-from Switch_drivers.Keysight_34980A_modules import Keysight_34922A_70ch_MUX, Keysight_34932A_2x4x16_Matrix
-from VISA_utility import VISA_instrument
+from RRAM_VISA_Drivers.Switch_drivers.Keysight_34980A_modules import Keysight_34922A_70ch_MUX, Keysight_34932A_2x4x16_Matrix
+from RRAM_VISA_Drivers.VISA_utility import VISA_instrument
 
 
 

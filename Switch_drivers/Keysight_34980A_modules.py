@@ -3,7 +3,7 @@ Drivers for configuring modules on Keysight 34980A Multifunction Switch/Measure 
 """
 import pyvisa 
 from typing import Union
-from VISA_utility import VISA_module, twodig
+from RRAM_VISA_Drivers.VISA_utility import VISA_module, twodig
 
 
 

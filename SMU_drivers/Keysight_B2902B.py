@@ -4,8 +4,8 @@ Driver for configuring B2902B instrument as a mainframe
 import pyvisa
 from typing import Union
 import numpy as np
-from VISA_utility import VISA_instrument
-from SMU_drivers.Keysight_SMU import SMU
+from RRAM_VISA_Drivers.VISA_utility import VISA_instrument
+from RRAM_VISA_Drivers.SMU_drivers.Keysight_SMU import SMU
 
 
 

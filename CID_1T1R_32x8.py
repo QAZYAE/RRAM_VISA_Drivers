@@ -7,8 +7,8 @@ B2902B должны быть соединены проводом.
 import pyvisa 
 import numpy as np
 import time
-from SMU_drivers.Keysight_B2902B import B2902B
-from Switch_drivers.Keysight_34980A_1T1R_32x8 import Keysight_34980A_1T1R_32x8
+from RRAM_VISA_Drivers.SMU_drivers import B2902B
+from RRAM_VISA_Drivers.Switch_drivers import Keysight_34980A_1T1R_32x8
 
 
 

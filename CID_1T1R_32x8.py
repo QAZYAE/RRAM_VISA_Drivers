@@ -20,7 +20,8 @@ class CID_1T1R_32x8_driver:
     trigger_count: int = 0  # Trigger count for current experiment
     armed: bool = False  # True if instruments measuring at the moment
     currents_acquired: int = 0  # Number of currents aquired via sense(). Resets on config or clear
-    last_sense: float = 0  # Time of the last sense 
+    last_sense_time: float = 0  # Time of the last sense 
+    read_side: int = 1  # SMU to read current from when using .sense(): 1 or 2.
     sim: str = False  # True for simulation mode
     
     def __init__(
@@ -121,14 +122,14 @@ class CID_1T1R_32x8_driver:
         r1 = self.A.clear()
         r2 = self.B.clear()
         self.armed = False
-        self.last_sense = 0
+        self.last_sense_time = 0
         self.currents_acquired = 0
         if r1.startswith('ERROR') or r2.startswith('ERROR'):
             return False
         return True
             
         
-    def connect_cell(self, wl: int, bl: int) -> str:
+    def connect_cell(self, wl: int, bl: int) -> tuple[bool, str]:
         """Connect cell via switch unit. wl and bl are 0 through 7 and 0 through 31.
 
         Args:
@@ -136,9 +137,13 @@ class CID_1T1R_32x8_driver:
             bl (int): Bit Line (0 through 31).
 
         Returns:
-            response (str): Error if an error occured.
+            flag, response (tuple[bool, str]): Connected flag (True if the cell was
+            successfully disconnected), response or error.
         """
-        return self.switch.connect_cell(row=wl+1, column=bl+1)
+        resp = self.switch.connect_cell(row=wl+1, column=bl+1)
+        if resp.startswith('ERROR'):
+            return False, resp
+        return True, resp
         
         
     def disconnect(self) -> tuple[bool, str]:
@@ -165,28 +170,89 @@ class CID_1T1R_32x8_driver:
         return True, 'VISA-instruments were disconnected'
     
     
-    def standby(self) -> str:
-        """_summary_
+    def standby(self) -> tuple[bool, str]:
+        """Turns on Standby mode and clears all instruments.
 
         Returns:
-            str: _description_
+            flag, response (tuple[bool, str]): Standby flag (True if standby mode
+            was turned on successfully), response or error.
         """
-        
-        
-    def panic(self) -> str:
-        """_summary_
+        flag1 = self.clear_instruments()
+        r2 = self.switch.standby()
+        if r2.startswith('ERROR'):
+            flag2 = False
+        else:
+            flag2 = True
+        flag = flag1 and flag2
+        if flag:
+            return True, 'Instruments are in standby mode'
+        return False, r2
+    
+    
+    def _panic_attempt(self) -> tuple[bool, str]:
+        """Panic once to immediately stop the experiment.
 
         Returns:
-            str: _description_
+            flag, response (tuple[bool, str]): Resolved flag (True if panic was resolved), 
+            response or error.
         """
+        flag, resp = self.standby()
+        resps = [resp]  # Response list
+        if not flag:
+            resps.append(self.A.set_output_state('off'))
+            resps.append(self.B.set_output_state('off'))
+        for smu in [self.A.SMU1, self.A.SMU2, self.B.SMU1]:
+            resps.append(smu.set_base_voltage_immediate(0, current_compliance=1e-8))
+        for r in resps:
+            if r.startswith('ERROR'):
+                flag = False
+        return flag, '\n'.join(resps)
+        
+        
+    def panic(self) -> tuple[bool, str]:
+        """Panic mode for immediately stopping the experiment.
+
+        Returns:
+            flag, response (tuple[bool, str]): Resolved flag (True if panic was resolved), 
+            response or error.
+        """
+        resps = []
+        for _ in range(5):
+            flag, response = self._panic_attempt()
+            resps.append(response)
+            if flag:
+                break
+        resps.append(self.A.set_output_state('on'))
+        resps.append(self.B.set_output_state('on'))
+        return flag, '\n'.join(resps)
             
         
     def sense(self) -> np.ndarray:
-        """_summary_
+        """Read sense data from the instruments. Returns resistance array with resistances
+        which haven't been read yet.
 
         Returns:
-            np.ndarray: _description_
+            resistances (np.ndarray)
         """
+        if self.armed:
+            while time.time() < self.last_sense_time + self.trigger_interval:
+                time.sleep(0.1 * self.trigger_interval)  # Skipping time to match instrument trigger
+        if self.sim:
+            sense1 = np.random.randint(1, 10000, 2 * (self.currents_acquired+1))
+            sense2 = np.random.randint(1, 10000, 2 * (self.currents_acquired+1))
+        else:
+            sense1, sense2 = self.A.get_sense_data()
+            # TODO Save WL data
+        self.last_sense_time = time.time()
+        if self.read_side == 1:
+            V = sense1[::2]
+            Curr = sense1[1::2]
+        elif self.read_side == 2:
+            V = sense2[::2]
+            Curr = sense2[1::2]
+        R = np.abs(V / Curr)[self.currents_acquired:]
+        self.currents_acquired = len(R)
+        return R  
         
         
     def config_iv_dc(
@@ -246,15 +312,17 @@ class CID_1T1R_32x8_driver:
         if sweep_side == 'BL':  # Reset
             sweep_smu = self.A.SMU1
             zero_smu = self.A.SMU2
+            self.read_side = 1
         elif sweep_side == 'NL':  # Set
             sweep_smu = self.A.SMU2
             zero_smu = self.A.SMU1
+            self.read_side = 2
         else:
             return 'ERROR: Wrong sweep_side: valid sides are BL and NL'
         resps.append(sweep_smu.set_sweep_voltage(stop=v_stop, n_points=n_points, start=v_start, 
                                                  double=double, current_compliance=current_compliance))
         resps.append(zero_smu.set_constant_voltage(voltage=0, current_compliance=current_compliance))
-        resps.append(self.B.SMU1.set_constant_voltage(voltage=3.3, current_compliance=current_compliance))
+        resps.append(self.B.SMU1.set_constant_voltage(voltage=3.3, current_compliance=1e-6))
         # todo: Вынести 3.3 в конфигурацию
         # Checking if configuration is set
         bad_config_flag = False
@@ -274,5 +342,5 @@ class CID_1T1R_32x8_driver:
         self.A.initiate()
         self.B.initiate()
         self.A.arm()
-        self.last_sense = time.time()
+        self.last_sense_time = time.time()
         return True, response + 'SMU_IV_DC was configured'

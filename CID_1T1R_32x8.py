@@ -256,11 +256,14 @@ class CID_1T1R_32x8_driver:
             V = sense2[::2]
             Curr = sense2[1::2]
         R = np.abs(V / Curr)
+        print(f'Driver: V = {V}, curr = {Curr}')
         for r in R[self.acquired_counter:]:
             self.queue.append(r)
         self.acquired_counter = len(R)
         try:
-            return self.queue.pop(0)
+            R_sent = self.queue.pop(0)
+            print(R_sent)
+            return R_sent
         except IndexError:
             return 0
         

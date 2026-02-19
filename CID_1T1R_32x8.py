@@ -18,10 +18,10 @@ class CID_1T1R_32x8_driver:
     """
     trigger_interval: float = 100e-6  # Interval between triggers in seconds
     trigger_count: int = 0  # Trigger count for current experiment
-    armed: bool = False  # True if instruments measuring at the moment
-    currents_acquired: int = 0  # Number of currents aquired via sense(). Resets on config or clear
+    acquired_counter: int = 0  # Number of resistances acquired via sense(). Resets on config or clear
     last_sense_time: float = 0  # Time of the last sense 
     read_side: int = 1  # SMU to read current from when using .sense(): 1 or 2.
+    queue: list = []
     sim: str = False  # True for simulation mode
     
     def __init__(
@@ -125,9 +125,8 @@ class CID_1T1R_32x8_driver:
         """
         r1 = self.A.clear()
         r2 = self.B.clear()
-        self.armed = False
         self.last_sense_time = 0
-        self.currents_acquired = 0
+        self.acquired_counter = 0
         if r1.startswith('ERROR') or r2.startswith('ERROR'):
             return False
         return True
@@ -241,12 +240,11 @@ class CID_1T1R_32x8_driver:
         Returns:
             resistances (np.ndarray)
         """
-        if self.armed:
-            while time.time() < self.last_sense_time + self.trigger_interval:
-                time.sleep(0.1 * self.trigger_interval)  # Skipping time to match instrument trigger
+        while time.time() < self.last_sense_time + self.trigger_interval:
+            time.sleep(0.1 * self.trigger_interval)  # Skipping time to match instrument trigger
         if self.sim:
-            sense1 = np.random.randint(1, 10000, 2 * (self.currents_acquired+1))
-            sense2 = np.random.randint(1, 10000, 2 * (self.currents_acquired+1))
+            sense1 = np.random.randint(1, 10000, 2 * (self.acquired_counter+1))
+            sense2 = np.random.randint(1, 10000, 2 * (self.acquired_counter+1))
         else:
             sense1, sense2 = self.A.get_sense_data()
             # TODO Save WL data
@@ -257,9 +255,14 @@ class CID_1T1R_32x8_driver:
         elif self.read_side == 2:
             V = sense2[::2]
             Curr = sense2[1::2]
-        R = np.abs(V / Curr)[self.currents_acquired:]
-        self.currents_acquired = len(R)
-        return R  
+        R = np.abs(V / Curr)
+        for r in R[self.acquired_counter:]:
+            self.queue.append(r)
+        self.acquired_counter = len(R)
+        try:
+            return self.queue.pop(0)
+        except IndexError:
+            return 0
         
         
     def config_iv_dc(
@@ -304,7 +307,8 @@ class CID_1T1R_32x8_driver:
             response = ''
             self.trigger_interval = trigger_interval
         self.trigger_count = 2 * n_points if double else n_points
-        self.currents_acquired = 0
+        self.acquired_counter = 0
+        self.queue = []
         resps = []  # Response list
         # Clearing
         resps.append(self.A.clear())
@@ -345,7 +349,6 @@ class CID_1T1R_32x8_driver:
         if bad_config_flag:
             return False, response
         # Start the experiment
-        self.armed = True
         self.A.initiate()
         self.B.SMU1.initiate()
         self.A.arm()

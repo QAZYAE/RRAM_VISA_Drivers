@@ -225,7 +225,7 @@ class SMU(VISA_module):
             return self.write_resp(f'sense{self.ch}:current:aperture:auto on',
                                    'Integration time is set to AUTO.')
         return self.write_resp(
-            ';:'.join([f'sense{self.ch}:cuurent:aperture:auto off',
+            ';:'.join([f'sense{self.ch}:current:aperture:auto off',
                        f'sense{self.ch}:current:aperture {aperture}']),    
             f'Integration time is set to {aperture} s.'
         )

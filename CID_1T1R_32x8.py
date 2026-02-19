@@ -67,6 +67,10 @@ class CID_1T1R_32x8_driver:
             resource=Switch_res, 
             config_path=os.path.join(os.getcwd(), 'RRAM_VISA_Drivers', 'config', 'Keysight_34980A_1T1R_32x8.json')
         )
+        # Beeping
+        self.A.beep(frequency=1000, time=0.2)
+        time.sleep(0.2)
+        self.B.beep(frequency=1200, time=0.2)
         # Checking connections and instrument types
         for inst, name in zip([self.A, self.B, self.switch], 
                               ['B2902B_A', 'B2902B_B', 'Switch unit']):
@@ -159,6 +163,9 @@ class CID_1T1R_32x8_driver:
         resps.append(self.B.clear())
         resps.append(self.A.set_output_state('off'))
         resps.append(self.B.set_output_state('off'))
+        resps.append(self.A.beep(frequency=1200, time=0.2))
+        time.sleep(0.2)
+        resps.append(self.B.beep(frequency=1000, time=0.2))
         if not self.sim:
             try:
                 self.rm.close()
@@ -333,14 +340,14 @@ class CID_1T1R_32x8_driver:
         for inst in [self.A, self.B]:
             err = inst.get_errors()
             if err is not None:
-                response = ''.join(response, err)
+                response = ''.join([response] + err)
                 bad_config_flag = True
         if bad_config_flag:
             return False, response
         # Start the experiment
         self.armed = True
         self.A.initiate()
-        self.B.initiate()
+        self.B.SMU1.initiate()
         self.A.arm()
         self.last_sense_time = time.time()
         return True, response + 'SMU_IV_DC was configured'

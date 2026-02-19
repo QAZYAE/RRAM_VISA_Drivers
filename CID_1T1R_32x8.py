@@ -355,5 +355,6 @@ class CID_1T1R_32x8_driver:
         self.A.initiate()
         self.B.SMU1.initiate()
         self.A.arm()
+        time.sleep(self.trigger_interval)
         self.last_sense_time = time.time()
         return True, response + 'SMU_IV_DC was configured'

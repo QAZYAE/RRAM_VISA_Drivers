@@ -123,12 +123,15 @@ class CID_1T1R_32x8_driver:
         Returns:
             cleared (bool): True if instruments were cleared.
         """
-        r1 = self.A.clear()
-        r2 = self.B.clear()
+        resps = []
+        resps.append(self.A.clear())
+        resps.append(self.B.clear())
+        resps.append(self.B.SMU1.set_base_voltage_immediate(0, current_compliance=1e-8))
         self.last_sense_time = 0
         self.acquired_counter = 0
-        if r1.startswith('ERROR') or r2.startswith('ERROR'):
-            return False
+        for r in resps:
+            if r.startswith('ERROR'):
+                return False
         return True
             
         
@@ -160,6 +163,7 @@ class CID_1T1R_32x8_driver:
         resps.append(self.switch.disconnect_all())
         resps.append(self.A.clear())
         resps.append(self.B.clear())
+        resps.append(self.B.SMU1.set_base_voltage_immediate(0, current_compliance=1e-8))
         resps.append(self.A.set_output_state('off'))
         resps.append(self.B.set_output_state('off'))
         resps.append(self.A.beep(frequency=1200, time=0.2))
@@ -337,6 +341,7 @@ class CID_1T1R_32x8_driver:
                                                  double=double, current_compliance=current_compliance))
         resps.append(zero_smu.set_constant_voltage(voltage=0, current_compliance=current_compliance))
         resps.append(self.B.SMU1.set_constant_voltage(voltage=3.3, current_compliance=1e-6))
+        resps.append(self.B.SMU1.set_base_voltage_immediate(3.3, current_compliance=1e-6))
         # todo: Вынести 3.3 в конфигурацию
         # Checking if configuration is set
         bad_config_flag = False

@@ -180,7 +180,7 @@ class B2902B(VISA_instrument):
         return self.write_resp('trigger (@1,2)', 'TRIGGER trigger was sent')
     
     
-    def get_sense_data(self, latest: bool = False) -> Union[tuple[np.ndarray], str]:
+    def get_sense_data(self, latest: bool = False) -> Union[tuple[np.ndarray], str, None]:
         """Return the array data for both channels, format is specified by B2902B.set_data_format().
         The data is not cleared until the .initiate() method is executed.
 
@@ -189,14 +189,19 @@ class B2902B(VISA_instrument):
                 Defaults to False.
 
         Returns:
-            data (tuple[np.ndarray] | str): Data specified by B2902B.set_data_format().
-                Returns error if an error occured.
+            data (tuple[np.ndarray] | str | None): Data specified by B2902B.set_data_format().
+                Returns error if an error occured, returns None is the buffer is empty.
         """
         lat = ':latest' if latest else ''
         flag, response = self.query_resp(f'sense1:data{lat}?;:sense2:data{lat}?', 'Getting sense data')
         if flag:
             s1, s2 = response.split(';')
-            return np.array(s1.split(','), dtype=float), np.array(s2.split(','), dtype=float)
+            arr1 = np.array(s1.split(','), dtype=float)
+            arr2 = np.array(s2.split(','), dtype=float)
+            if (arr1[0] in [9.91e+37, 9.90e+37, 9.90e-37] or
+                arr2[0] in [9.91e+37, 9.90e+37, 9.90e-37]):
+                return None
+            return arr1, arr2
         return response
     
     

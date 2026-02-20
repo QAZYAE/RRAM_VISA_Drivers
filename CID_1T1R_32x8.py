@@ -250,7 +250,17 @@ class CID_1T1R_32x8_driver:
             sense1 = np.random.randint(1, 10000, 2 * (self.acquired_counter+1))
             sense2 = np.random.randint(1, 10000, 2 * (self.acquired_counter+1))
         else:
-            sense1, sense2 = self.A.get_sense_data()
+            for _ in range(500):
+                sense_data = self.A.get_sense_data()
+                if sense_data is not None:
+                    break
+                time.sleep(0.1 * self.trigger_interval)
+            if sense_data is None:
+                return 'Cant obtain sense data!'
+            if isinstance(sense_data, str):
+                return sense_data
+            else:
+                sense1, sense2 = sense_data
             # TODO Save WL data
         self.last_sense_time = time.time()
         if self.read_side == 1:
@@ -269,7 +279,7 @@ class CID_1T1R_32x8_driver:
             print(R_sent)
             return R_sent
         except IndexError:
-            return 0
+            return 'Sense queue is empty!'
         
         
     def config_iv_dc(

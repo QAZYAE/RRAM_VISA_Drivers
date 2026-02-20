@@ -231,7 +231,7 @@ class SMU(VISA_module):
         )
         
         
-    def get_sense_data(self, latest: bool = False) -> Union[np.ndarray, str]:
+    def get_sense_data(self, latest: bool = False) -> Union[np.ndarray, str, None]:
         """Return the array data, format is specified by B2902B.set_data_format().
         The data is not cleared until the .initiate() method is executed.
 
@@ -240,13 +240,16 @@ class SMU(VISA_module):
                 Defaults to False.
 
         Returns:
-            data (np.ndarray | str): Data specified by B2902B.set_data_format(). 
-                Returns error if an error occured.
+            data (np.ndarray | str | None): Data specified by B2902B.set_data_format(). 
+                Returns error if an error occured, returns None if the buffer is empty.
         """
         lat = ':latest' if latest else ''
         flag, response = self.query_resp(f'sense{self.ch}:data{lat}?', 'Getting sense data')
         if flag:
-            return np.array(response.split(','), dtype=float)
+            array = np.array(response.split(','), dtype=float)
+            if array[0] in [9.91e+37, 9.90e+37, 9.90e-37]:
+                return None
+            return array
         return response
     
     

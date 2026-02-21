@@ -246,36 +246,37 @@ class CID_1T1R_32x8_driver:
         Returns:
             resistances (np.ndarray)
         """
-        while time.time() < self.last_sense_time + self.trigger_interval:
-            time.sleep(0.1 * self.trigger_interval)  # Skipping time to match instrument trigger
-        if self.sim:
-            sense1 = np.random.randint(1, 10000, 2 * (self.acquired_counter+1))
-            sense2 = np.random.randint(1, 10000, 2 * (self.acquired_counter+1))
-        else:
-            for _ in range(500):
-                sense_data = self.A.get_sense_data()
-                if sense_data is not None:
-                    break
-                time.sleep(0.1 * self.trigger_interval)
-            if sense_data is None:
-                return 'Cant obtain sense data!'
-            if isinstance(sense_data, str):
-                return sense_data
+        if self.acquired_counter != self.trigger_count:  # Skips acquire if the queue is full
+            while time.time() < self.last_sense_time + self.trigger_interval:
+                time.sleep(0.1 * self.trigger_interval)  # Skipping time to match instrument trigger
+            if self.sim:
+                sense1 = np.random.randint(1, 10000, 2 * (self.acquired_counter+1))
+                sense2 = np.random.randint(1, 10000, 2 * (self.acquired_counter+1))
             else:
-                sense1, sense2 = sense_data
-            # TODO Save WL data
-        self.last_sense_time = time.time()
-        if self.read_side == 1:
-            V = sense1[::2]
-            Curr = sense1[1::2]
-        elif self.read_side == 2:
-            V = sense2[::2]
-            Curr = sense2[1::2]
-        R = np.abs(V / Curr)
-        print(f'Driver: V = {V}, curr = {Curr}')
-        for r in R[self.acquired_counter:]:
-            self.queue.append(r)
-        self.acquired_counter = len(R)
+                for _ in range(500):
+                    sense_data = self.A.get_sense_data()
+                    if sense_data is not None:
+                        break
+                    time.sleep(0.1 * self.trigger_interval)
+                if sense_data is None:
+                    return 'Cant obtain sense data!'
+                if isinstance(sense_data, str):
+                    return sense_data
+                else:
+                    sense1, sense2 = sense_data
+                # TODO Save WL data
+            self.last_sense_time = time.time()
+            if self.read_side == 1:
+                V = sense1[::2]
+                Curr = sense1[1::2]
+            elif self.read_side == 2:
+                V = sense2[::2]
+                Curr = sense2[1::2]
+            R = np.abs(V / Curr)
+            print(f'Driver: V = {V}, curr = {Curr}')
+            for r in R[self.acquired_counter:]:
+                self.queue.append(r)
+            self.acquired_counter = len(R)
         try:
             R_sent = self.queue.pop(0)
             print(R_sent)

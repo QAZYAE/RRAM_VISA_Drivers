@@ -233,8 +233,9 @@ class CID_1T1R_32x8_driver:
             resps.append(response)
             if flag:
                 break
-        resps.append(self.A.set_output_state('on'))
-        resps.append(self.B.set_output_state('on'))
+        if flag:
+            resps.append(self.A.set_output_state('on'))
+            resps.append(self.B.set_output_state('on'))
         return flag, '\n'.join(resps)
             
         

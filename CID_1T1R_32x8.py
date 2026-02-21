@@ -237,6 +237,25 @@ class CID_1T1R_32x8_driver:
             resps.append(self.A.set_output_state('on'))
             resps.append(self.B.set_output_state('on'))
         return flag, '\n'.join(resps)
+    
+    
+    def _random_sense(self, acquired_counter: int) -> tuple[np.ndarray]:
+        """Generates random sense samples in format (Voltage, Current) with size=acquired_counter+1
+            (Size is the number of (Voltage, Current) pairs)
+
+        Args:
+            acquired_counter (int): acquired counter for previous .sense() operation.
+
+        Returns:
+            sense1, sense2 (tuple[np.ndarray]): sense samples for two channels.
+        """
+        V = np.random.randint(1, 10000, 2*(acquired_counter+1)) / 1e3
+        Curr = np.random.randint(1, 10000, 2*(acquired_counter+1)) / 1e7
+        sense1, sense2 = [], []
+        for i in range(0, 2*(acquired_counter+1), 2):
+            sense1 += [V[i], Curr[i]]
+            sense2 += [V[i+1], Curr[i+1]]
+        return np.array(sense1), np.array(sense2)
             
         
     def sense(self) -> np.ndarray:
@@ -250,8 +269,7 @@ class CID_1T1R_32x8_driver:
             while time.time() < self.last_sense_time + self.trigger_interval:
                 time.sleep(0.1 * self.trigger_interval)  # Skipping time to match instrument trigger
             if self.sim:
-                sense1 = np.random.randint(1, 10000, 2 * (self.acquired_counter+1))
-                sense2 = np.random.randint(1, 10000, 2 * (self.acquired_counter+1))
+                sense1, sense2 = self._random_sense(self.acquired_counter)
             else:
                 for _ in range(500):
                     sense_data = self.A.get_sense_data()

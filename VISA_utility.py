@@ -92,7 +92,7 @@ class VISA_module:
             self.resource.write(command)
             return f'{self.resp} {normal_response}'
         except Exception as e:
-            return f'ERROR: {self.resp}\n\t{f'VISA ERROR:\n\tCommand: "{command}"\n\tVisaIOError: {e}'}'
+            return f'ERROR: {self.resp}\n\tVISA ERROR:\n\tCommand: "{command}"\n\tVisaIOError: {e}'
     
     
     def query(self, command: str) -> str:
@@ -132,7 +132,7 @@ class VISA_module:
             response = self.resource.query(command)
             return True, response
         except Exception as e:
-            return False, f'ERROR: {self.resp}\n\t{f'VISA ERROR:\n\tCommand: "{command}"\n\tVisaIOError: {e}'}'
+            return False, f'ERROR: {self.resp}\n\tVISA ERROR:\n\tCommand: "{command}"\n\tVisaIOError: {e}'
         
         
         

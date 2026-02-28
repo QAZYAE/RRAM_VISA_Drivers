@@ -1,1 +1,2 @@
-from RRAM_VISA_Drivers.CID_1T1R_32x8 import CID_1T1R_32x8_driver
+from RRAM_VISA_Drivers.CID_1T1R_32x8 import CID_1T1R_32x8_switched
+from RRAM_VISA_Drivers.CID_1T1R_probe_station import CID_1T1R_32x8_probe_station

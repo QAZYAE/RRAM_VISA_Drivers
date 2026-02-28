@@ -57,7 +57,23 @@ class Keysight_34980A_1T1R_32x8(VISA_instrument):
         self.switch_NL_col: int = scheme_data['Switch_NL_column']
         self.MUX = Keysight_34922A_70ch_MUX(resource, scheme_data['BL_slot'])
         self.MAT = Keysight_34932A_2x4x16_Matrix(resource, scheme_data['WLNL_slot'])
-        self.standby()
+        # Checking connection
+        flag = self.check_instument_connection()
+        self.get_errors()  # Clearing error queue
+        if not flag: 
+            print('Switch unit init ERROR')
+            raise ConnectionError('Could not connect to the Switch unit!')
+        # Turning standby mode on
+        resp = self.standby()
+        if resp.startswith('ERROR'):
+            print('Switch unit init ERROR')
+            raise ConnectionError(resp)
+        # Checking error queue
+        err = self.get_errors()
+        if err is not None:
+            print('Switch unit init ERROR')
+            raise ConnectionError(f'Error in the Switch unit error queue: {err}')
+        print('Switch unit init success')
     
     
     def disconnect_all(self) -> str:

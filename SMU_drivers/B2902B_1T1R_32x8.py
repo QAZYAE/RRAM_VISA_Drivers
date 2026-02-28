@@ -110,9 +110,15 @@ class B2902B_1T1R_32x8_driver:
         return True
     
     
-    def connect_cell(self, wl: int, bl: int) -> None:
-        """Empty function for compatibility"""
-        pass
+    def connect_cell(self, wl: int, bl: int) -> tuple[bool, str]:
+        """Empty function for compatibility
+
+        Returns:
+            flag, response (tuple[bool, str]): Connected flag (True if the cell was
+            successfully disconnected), response or error.
+        """
+        return True, f'*Pretending to connect cell {wl}-{bl}* ' + \
+                      '(cell connection is not available for probe station driver)'
     
     
     def disconnect(self) -> tuple[bool, str]:

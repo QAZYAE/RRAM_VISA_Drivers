@@ -11,6 +11,13 @@ from typing import Union
 from RRAM_VISA_Drivers.SMU_drivers import B2902B
 
 
+_sign = {  # Sign dict for applying voltage to BL(reset) and NL(set)
+    1: 'BL',
+    0: 'NL'
+}
+
+GATE_VOLTAGE = 3.3  # Voltage applied to transistor gate
+
 
 class B2902B_1T1R_32x8_driver:
     """Driver for measuring 1T1R 32x8 crossbar arrays
@@ -219,7 +226,7 @@ class B2902B_1T1R_32x8_driver:
         which haven't been read yet.
 
         Returns:
-            resistances (np.ndarray)
+            resistance (float): First resistance in the queue.
         """
         if self.acquired_counter != self.trigger_count:  # Skips acquire if the queue is full
             while time.time() < self.last_sense_time + self.trigger_interval:
@@ -253,7 +260,7 @@ class B2902B_1T1R_32x8_driver:
             self.acquired_counter = len(R)
         try:
             R_sent = self.queue.pop(0)
-            print(R_sent)
+            print(f'Driver: R_sent = {R_sent}')
             return R_sent
         except IndexError:
             return 'Sense queue is empty!'
@@ -267,7 +274,7 @@ class B2902B_1T1R_32x8_driver:
         n_points: int,
         double: bool,
         current_compliance: float,
-        sweep_side: str = 'BL'
+        sign: int = 1
     ) -> tuple[bool, str]:
         """Configure IV_DC mode. WARNING: Method doesn't connect the crossbar cell, 
         it should be connected via .connect_cell() method.
@@ -280,7 +287,8 @@ class B2902B_1T1R_32x8_driver:
                 (doubled automatically for double IV curve).
             double (bool): True for double IV curve.
             current_compliance (float): Current compliance (Amperes).
-            sweep_side (str, optional): Side where sweep voltage is applied: 'BL' or 'NL'.
+            sign (int, optional): Side where sweep voltage is applied: 1 -- 'BL', 0 -- 'NL'.
+                Defaults to 1.
 
         Returns:
             flag, response (tuple[bool, str]): Good_config_flag (True if instruments were 
@@ -293,7 +301,7 @@ class B2902B_1T1R_32x8_driver:
               n_points,
               double,
               current_compliance,
-              sweep_side)
+              _sign[sign])
         if trigger_interval < 100e-6:
             response = 'WARNING: Too short trigger interval. The interval is set to 100us (min value)\n\t'
             self.trigger_interval = 100e-6
@@ -314,22 +322,19 @@ class B2902B_1T1R_32x8_driver:
             resps.append(smu.set_measurement_aperture(aperture=0.5*self.trigger_interval))
             resps.append(smu.set_source_shape('DC'))
         # Configuring sweep
-        if sweep_side == 'BL':  # Reset
+        if sign:  # Reset
             sweep_smu = self.A.SMU1
             zero_smu = self.A.SMU2
             self.read_side = 1
-        elif sweep_side == 'NL':  # Set
+        else:  # Set
             sweep_smu = self.A.SMU2
             zero_smu = self.A.SMU1
             self.read_side = 2
-        else:
-            return 'ERROR: Wrong sweep_side: valid sides are BL and NL'
         resps.append(sweep_smu.set_sweep_voltage(stop=v_stop, n_points=n_points, start=v_start, 
                                                  double=double, current_compliance=current_compliance))
         resps.append(zero_smu.set_constant_voltage(voltage=0, current_compliance=current_compliance))
-        resps.append(self.B.SMU1.set_constant_voltage(voltage=3.3, current_compliance=1e-6))
-        resps.append(self.B.SMU1.set_base_voltage_immediate(3.3, current_compliance=1e-6))
-        # todo: Вынести 3.3 в конфигурацию
+        resps.append(self.B.SMU1.set_constant_voltage(voltage=GATE_VOLTAGE, current_compliance=1e-6))
+        resps.append(self.B.SMU1.set_base_voltage_immediate(voltage=GATE_VOLTAGE, current_compliance=1e-6))
         # Checking if configuration is set
         bad_config_flag = False
         for resp in resps:
@@ -350,3 +355,90 @@ class B2902B_1T1R_32x8_driver:
         time.sleep(self.trigger_interval)
         self.last_sense_time = time.time()
         return True, response + 'SMU_IV_DC was configured'
+    
+    
+    def mode_7(
+        self,
+        pulse_width: float,
+        apply_voltage: float,
+        read_voltage: float,
+        current_compliance: float,
+        sign: int = 1
+    ) -> tuple[bool, str, float]:
+        """Apply mode 7 sequence: Apply voltage pulse followed by read pulse.
+        WARNING: Method doesn't connect the crossbar cell, 
+        it should be connected via .connect_cell() method.
+
+        Args:
+            pulse_width (float): Apply and read pulses widths
+            apply_voltage (float): Voltage to apply during the switch pulse (Volts).
+            read_voltage (float): Voltage to apply during the read pulse (Volts).
+            current_compliance (float): Current compliance (Amperes).
+            sign (int, optional): Side where switch voltage is applied: 1 -- 'BL', 
+                0 -- 'NL'. Defaults to 1.
+
+
+        Returns:
+            flag, response, resistance (bool, str, float): config_flag (True if configured 
+            successfully), instrument_response (error if occured), Resistance read by the read pulse.
+        """
+        if pulse_width < 50e-6:
+            response = 'WARNING: Too short trigger interval. The interval is set to 100us (min value)\n\t'
+            pulse_width = 50e-6
+            self.trigger_interval = 5 * pulse_width
+        else:
+            response = ''
+            self.trigger_interval = 5 * pulse_width
+        self.trigger_count = 2
+        self.acquired_counter = 0
+        self.queue = []
+        resps = []  # Response list
+        # Clearing
+        resps.append(self.A.clear())
+        resps.append(self.B.clear())
+        # Configuring triggers and source shapes
+        for smu in [self.A.SMU1, self.A.SMU2, self.B.SMU1]:
+            resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
+                                               acquire_delay=0.3*pulse_width))
+            resps.append(smu.set_measurement_aperture(aperture=0.5*pulse_width))
+        resps.append(self.B.SMU1.set_source_shape('DC'))
+        # Pulse mode for BL and NL
+        for smu in [self.A.SMU1, self.A.SMU2]:
+            resps.append(smu.set_source_shape('pulse'))
+            resps.append(smu.set_pulse_config(width=pulse_width))
+        # Configuring pulses
+        if sign:  # Reset
+            resps.append(self.A.SMU1.set_list_voltage([apply_voltage, read_voltage], current_compliance=current_compliance))
+            resps.append(self.A.SMU2.set_list_voltage([0, 0], current_compliance=current_compliance))
+            self.read_side = 1
+        else:  # Set
+            resps.append(self.A.SMU1.set_list_voltage([0, read_voltage], current_compliance=current_compliance))
+            resps.append(self.A.SMU2.set_list_voltage([apply_voltage, 0], current_compliance=current_compliance))
+            self.read_side = 2
+        resps.append(self.B.SMU1.set_constant_voltage(voltage=GATE_VOLTAGE, current_compliance=1e-6))
+        resps.append(self.B.SMU1.set_base_voltage_immediate(voltage=GATE_VOLTAGE, current_compliance=1e-6))
+        # Checking if configuration is set
+        bad_config_flag = False
+        for resp in resps:
+            if resp.startswith('ERROR'):
+                response += '\n' + resp
+                bad_config_flag = True
+        for inst in [self.A, self.B]:
+            err = inst.get_errors()
+            if err is not None:
+                response += '\t'.join(err)
+                bad_config_flag = True
+        if bad_config_flag:
+            return False, response, 0
+        # Apply the experiment
+        self.A.initiate()
+        self.B.SMU1.initiate()
+        self.A.arm()
+        time.sleep(self.trigger_interval)
+        self.last_sense_time = time.time()
+        self.sense()  # Skip first result
+        sense_data = self.sense()
+        if isinstance(sense_data, str):
+            return False, response + '\n' + sense_data, 0
+        return True, response, sense_data
+    

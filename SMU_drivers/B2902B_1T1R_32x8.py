@@ -389,7 +389,10 @@ class B2902B_1T1R_32x8_driver:
         else:
             response = ''
             self.trigger_interval = 5 * pulse_width
-        self.trigger_count = 2
+        if apply_voltage == 0:
+            self.trigger_count = 1
+        else:
+            self.trigger_count = 2
         self.acquired_counter = 0
         self.queue = []
         resps = []  # Response list
@@ -407,14 +410,16 @@ class B2902B_1T1R_32x8_driver:
             resps.append(smu.set_source_shape('pulse'))
             resps.append(smu.set_pulse_config(width=pulse_width))
         # Configuring pulses
-        if sign:  # Reset
-            resps.append(self.A.SMU1.set_list_voltage([apply_voltage, read_voltage], current_compliance=current_compliance))
-            resps.append(self.A.SMU2.set_list_voltage([0, 0], current_compliance=current_compliance))
-            self.read_side = 1
-        else:  # Set
-            resps.append(self.A.SMU1.set_list_voltage([0, read_voltage], current_compliance=current_compliance))
-            resps.append(self.A.SMU2.set_list_voltage([apply_voltage, 0], current_compliance=current_compliance))
-            self.read_side = 2
+        if apply_voltage == 0:
+            smu1_list, smu2_list = [read_voltage], [0]
+        else:
+            if sign:  # Reset
+                smu1_list, smu2_list = [apply_voltage, read_voltage], [0, 0]
+            else: # Set
+                smu1_list, smu2_list = [0, read_voltage], [apply_voltage, 0]
+        self.read_side = 1
+        resps.append(self.A.SMU1.set_list_voltage(smu1_list, current_compliance=current_compliance))
+        resps.append(self.A.SMU2.set_list_voltage(smu2_list, current_compliance=current_compliance))
         resps.append(self.B.SMU1.set_constant_voltage(voltage=GATE_VOLTAGE, current_compliance=1e-6))
         resps.append(self.B.SMU1.set_base_voltage_immediate(voltage=GATE_VOLTAGE, current_compliance=1e-6))
         # Checking if configuration is set
@@ -436,7 +441,8 @@ class B2902B_1T1R_32x8_driver:
         self.A.arm()
         time.sleep(self.trigger_interval)
         self.last_sense_time = time.time()
-        self.sense()  # Skip first result
+        if apply_voltage != 0:
+            self.sense()  # Skip first result
         sense_data = self.sense()
         if isinstance(sense_data, str):
             return False, response + '\n' + sense_data, 0

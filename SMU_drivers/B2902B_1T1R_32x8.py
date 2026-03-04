@@ -385,7 +385,7 @@ class B2902B_1T1R_32x8_driver:
             successfully), instrument_response (error if occured), Resistance read by the read pulse.
         """
         if pulse_width < 100e-6:
-            response = 'WARNING: Too short trigger interval. The interval is set to 100us (min value)\n\t'
+            response = 'WARNING: Too short pulse width. The interval is set to 100us (min value)\n\t'
             pulse_width = 100e-6
             self.trigger_interval = 5 * pulse_width
         else:
@@ -416,12 +416,17 @@ class B2902B_1T1R_32x8_driver:
         # Configuring pulses
         if apply_voltage == 0:
             smu1_list, smu2_list = [read_voltage], [0]
+            if sign: 
+                self.read_side = 1
+            else:
+                self.read_side = 2
         else:
             if sign:  # Reset
                 smu1_list, smu2_list = [apply_voltage, read_voltage], [0, 0]
+                self.read_side = 1
             else: # Set
                 smu1_list, smu2_list = [0, read_voltage], [apply_voltage, 0]
-        self.read_side = 1
+                self.read_side = 2
         resps.append(self.A.SMU1.set_list_voltage(smu1_list, current_compliance=current_compliance))
         resps.append(self.A.SMU2.set_list_voltage(smu2_list, current_compliance=current_compliance))
         resps.append(self.B.SMU1.set_constant_voltage(voltage=GATE_VOLTAGE, current_compliance=1e-6))
@@ -452,3 +457,85 @@ class B2902B_1T1R_32x8_driver:
             return False, response + '\n' + sense_data, 0
         return True, response, sense_data
     
+    
+    def config_pulsed_retention(
+        self,
+        pulse_width: float,
+        current_compliance: float,
+        n_pulses: int,
+        read_voltage: float,
+        sign: int = 1
+    ) -> tuple[bool, str]:
+        """Configure pulsed retention mode. WARNING: Method doesn't connect the crossbar cell, 
+        it should be connected via .connect_cell() method.
+
+        Args:
+            pulse_width (float): Pulse width (seconds).
+            current_compliance (float): Current compliance (Amperes).
+            n_pulses (int): Number of read pulses.
+            read_voltage (float): Read voltage (Volts).
+            sign (int, optional): Side where sweep voltage is applied: 1 -- 'BL', 0 -- 'NL'. 
+                Defaults to 1.
+
+        Returns:
+            tuple[bool, str]: Good_config_flag (True if instruments were
+            successfully configured), response or error.
+        """
+        if pulse_width < 100e-6:
+            response = 'WARNING: Too short pulse width. The interval is set to 100us (min value)\n\t'
+            pulse_width = 100e-6
+            self.trigger_interval = 5 * pulse_width
+        else:
+            response = ''
+            self.trigger_interval = 5 * pulse_width
+        self.trigger_count = n_pulses
+        self.acquired_counter = 0
+        self.queue = []
+        resps = []  # Response list
+        # Clearing
+        resps.append(self.A.clear())
+        resps.append(self.B.clear())
+        resps.append(self.A.wait_for_idle(wait_interval=0.1*self.trigger_interval))
+        resps.append(self.B.wait_for_idle(wait_interval=0.1*self.trigger_interval))
+        # Configuring triggers and source shapes
+        for smu in [self.A.SMU1, self.A.SMU2, self.B.SMU1]:
+            resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
+                                               acquire_delay=0.3*pulse_width))
+            resps.append(smu.set_measurement_aperture(aperture=0.4*pulse_width))
+        resps.append(self.B.SMU1.set_source_shape('DC'))
+        # Pulse mode for BL and NL
+        for smu in [self.A.SMU1, self.A.SMU2]:
+            resps.append(smu.set_source_shape('pulse'))
+            resps.append(smu.set_pulse_config(width=pulse_width))
+        if sign:
+            read_smu = self.A.SMU1
+            zero_smu = self.A.SMU2
+            self.read_side = 1
+        else:
+            zero_smu = self.A.SMU1
+            read_smu = self.A.SMU2
+            self.read_side = 2
+        resps.append(read_smu.set_list_voltage([read_voltage] * n_pulses, current_compliance=current_compliance))
+        resps.append(zero_smu.set_list_voltage([0] * n_pulses, current_compliance=current_compliance))
+        resps.append(self.B.SMU1.set_constant_voltage(voltage=GATE_VOLTAGE, current_compliance=1e-6))
+        resps.append(self.B.SMU1.set_base_voltage_immediate(voltage=GATE_VOLTAGE, current_compliance=1e-6))
+        # Checking if configuration is set
+        bad_config_flag = False
+        for resp in resps:
+            if resp.startswith('ERROR'):
+                response += '\n' + resp
+                bad_config_flag = True
+        for inst in [self.A, self.B]:
+            err = inst.get_errors()
+            if err is not None:
+                response += '\t'.join(err)
+                bad_config_flag = True
+        if bad_config_flag:
+            return False, response
+        # Apply the experiment
+        self.A.initiate()
+        self.B.SMU1.initiate()
+        self.A.arm()
+        time.sleep(self.trigger_interval)
+        self.last_sense_time = time.time()
+        return True, response + 'SMU_pulsed_retention was configured'

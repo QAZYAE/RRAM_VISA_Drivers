@@ -166,6 +166,8 @@ class B2902B(VISA_instrument):
         Returns:
             response (str): Command response | error if an error occured. 
         """
+        if self.sim: 
+            return 'Instrument is idle in 0 attempts'
         idle_success = False
         for i in range(attempts):
             response = self.query('idle?')

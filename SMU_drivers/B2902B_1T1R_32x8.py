@@ -197,6 +197,8 @@ class B2902B_1T1R_32x8_driver:
             if flag:
                 break
         if flag:
+            self.A.get_errors()
+            self.B.get_errors()
             resps.append(self.A.set_output_state('on'))
             resps.append(self.B.set_output_state('on'))
         return flag, '\n'.join(resps)
@@ -416,17 +418,12 @@ class B2902B_1T1R_32x8_driver:
         # Configuring pulses
         if apply_voltage == 0:
             smu1_list, smu2_list = [read_voltage], [0]
-            if sign: 
-                self.read_side = 1
-            else:
-                self.read_side = 2
         else:
             if sign:  # Reset
                 smu1_list, smu2_list = [apply_voltage, read_voltage], [0, 0]
-                self.read_side = 1
             else: # Set
                 smu1_list, smu2_list = [0, read_voltage], [apply_voltage, 0]
-                self.read_side = 2
+        self.read_side = 1
         resps.append(self.A.SMU1.set_list_voltage(smu1_list, current_compliance=current_compliance))
         resps.append(self.A.SMU2.set_list_voltage(smu2_list, current_compliance=current_compliance))
         resps.append(self.B.SMU1.set_constant_voltage(voltage=GATE_VOLTAGE, current_compliance=1e-6))

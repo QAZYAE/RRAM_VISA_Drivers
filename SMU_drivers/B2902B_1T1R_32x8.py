@@ -108,7 +108,7 @@ class B2902B_1T1R_32x8_driver:
         resps = []
         resps.append(self.A.clear())
         resps.append(self.B.clear())
-        resps.append(self.B.SMU1.set_base_voltage_immediate(0, current_compliance=1e-8))
+        resps.append(self.B.SMU1.set_base_voltage_immediate(0, current_compliance=1e-6))
         self.last_sense_time = 0
         self.acquired_counter = 0
         for r in resps:
@@ -138,7 +138,7 @@ class B2902B_1T1R_32x8_driver:
         resps = []  # Response list
         resps.append(self.A.clear())
         resps.append(self.B.clear())
-        resps.append(self.B.SMU1.set_base_voltage_immediate(0, current_compliance=1e-8))
+        resps.append(self.B.SMU1.set_base_voltage_immediate(0, current_compliance=1e-6))
         resps.append(self.A.set_output_state('off'))
         resps.append(self.B.set_output_state('off'))
         resps.append(self.A.beep(frequency=1200, time=0.2))
@@ -176,7 +176,7 @@ class B2902B_1T1R_32x8_driver:
         resps.append(self.A.set_output_state('off'))
         resps.append(self.B.set_output_state('off'))
         for smu in [self.A.SMU1, self.A.SMU2, self.B.SMU1]:
-            resps.append(smu.set_base_voltage_immediate(0, current_compliance=1e-8))
+            resps.append(smu.set_base_voltage_immediate(0, current_compliance=1e-6))
         for r in resps:
             if r.startswith('ERROR'):
                 flag = False
@@ -315,11 +315,13 @@ class B2902B_1T1R_32x8_driver:
         # Clearing
         resps.append(self.A.clear())
         resps.append(self.B.clear())
+        resps.append(self.A.wait_for_idle())
+        resps.append(self.B.wait_for_idle())
         # Configuring triggers and source shapes
         for smu in [self.A.SMU1, self.A.SMU2, self.B.SMU1]:
             resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
                                                acquire_delay=0.3*self.trigger_interval))
-            resps.append(smu.set_measurement_aperture(aperture=0.5*self.trigger_interval))
+            resps.append(smu.set_measurement_aperture(aperture=0.4*self.trigger_interval))
             resps.append(smu.set_source_shape('DC'))
         # Configuring sweep
         if sign:  # Reset
@@ -382,9 +384,9 @@ class B2902B_1T1R_32x8_driver:
             flag, response, resistance (bool, str, float): config_flag (True if configured 
             successfully), instrument_response (error if occured), Resistance read by the read pulse.
         """
-        if pulse_width < 50e-6:
+        if pulse_width < 100e-6:
             response = 'WARNING: Too short trigger interval. The interval is set to 100us (min value)\n\t'
-            pulse_width = 50e-6
+            pulse_width = 100e-6
             self.trigger_interval = 5 * pulse_width
         else:
             response = ''
@@ -399,11 +401,13 @@ class B2902B_1T1R_32x8_driver:
         # Clearing
         resps.append(self.A.clear())
         resps.append(self.B.clear())
+        resps.append(self.A.wait_for_idle(wait_interval=0.1*self.trigger_interval))
+        resps.append(self.B.wait_for_idle(wait_interval=0.1*self.trigger_interval))
         # Configuring triggers and source shapes
         for smu in [self.A.SMU1, self.A.SMU2, self.B.SMU1]:
             resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
                                                acquire_delay=0.3*pulse_width))
-            resps.append(smu.set_measurement_aperture(aperture=0.5*pulse_width))
+            resps.append(smu.set_measurement_aperture(aperture=0.4*pulse_width))
         resps.append(self.B.SMU1.set_source_shape('DC'))
         # Pulse mode for BL and NL
         for smu in [self.A.SMU1, self.A.SMU2]:

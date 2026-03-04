@@ -2,6 +2,7 @@
 Driver for configuring B2902B instrument as a mainframe
 """
 import pyvisa
+import time
 from typing import Union
 import numpy as np
 from RRAM_VISA_Drivers.VISA_utility import VISA_instrument
@@ -151,6 +152,32 @@ class B2902B(VISA_instrument):
             else:
                 response += '\n' + smu.set_trigger_output(state='on', pin=pin)
         return response
+    
+
+    def wait_for_idle(self, attempts: int = 500, wait_interval: float = 0.001) -> str:
+        """Waits until instrument is in IDLE state.
+
+        Args:
+            attempts (int, optional): Number of attempts to communicate with 
+                the instrument. Defaults to 500.
+            wait_interval (float, optional): Time to wait between attempts (seconds).
+                Defaults to 1 ms.
+
+        Returns:
+            response (str): Command response | error if an error occured. 
+        """
+        idle_success = False
+        for i in range(attempts):
+            response = self.query('idle?')
+            if response[0] == '1':
+                idle_success = True
+                break
+            time.sleep(wait_interval)
+        if idle_success:
+            if i > 0:
+                self.get_errors()  # Clearing query unterminated errors
+            return f'Instrument is idle in {i} attempts'
+        return f'ERROR: {self.resp}\n\tWait for IDLE unsuccessfull: {response}'
     
     
     def initiate(self) -> str:

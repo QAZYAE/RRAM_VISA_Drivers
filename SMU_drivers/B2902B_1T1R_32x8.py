@@ -25,7 +25,6 @@ class B2902B_1T1R_32x8_driver:
     trigger_interval: float = 100e-6  # Interval between triggers in seconds
     trigger_count: int = 0  # Trigger count for current experiment
     acquired_counter: int = 0  # Number of resistances acquired via sense(). Resets on config or clear
-    last_sense_time: float = 0  # Time of the last sense 
     read_side: int = 1  # SMU to read current from when using .sense(): 1 or 2.
     queue: list = []
     sim: str = False  # True for simulation mode
@@ -39,8 +38,12 @@ class B2902B_1T1R_32x8_driver:
         """Driver for measuring 1T1R 32x8 crossbar arrays via two B2902B units
 
         Args:
-            B2902B_A_res (pyvisa.Resource | None): _description_
-            B2902B_B_res (pyvisa.Resource | None): _description_
+            B2902B_A_res (pyvisa.Resource | None): Keysight B2902B's resource, controls `BL` and `NL`.
+                Initiate using :meth:`pyvisa.highlevel.ResourceManager.open_resource`).
+                If resource is None, the program simulates communication.
+            B2902B_B_res (pyvisa.Resource | None): Keysight B2902B's resource, controls `WL`.
+                Initiate using :meth:`pyvisa.highlevel.ResourceManager.open_resource`).
+                If resource is None, the program simulates communication.
         """
         self.sim = sim
         # Creating driver instances for the instruments
@@ -109,7 +112,6 @@ class B2902B_1T1R_32x8_driver:
         resps.append(self.A.clear())
         resps.append(self.B.clear())
         resps.append(self.B.SMU1.set_base_voltage_immediate(0, current_compliance=1e-6))
-        self.last_sense_time = 0
         self.acquired_counter = 0
         for r in resps:
             if r.startswith('ERROR'):
@@ -214,33 +216,38 @@ class B2902B_1T1R_32x8_driver:
         Returns:
             sense1, sense2 (tuple[np.ndarray]): sense samples for two channels.
         """
-        V = np.random.randint(1, 10000, 2*(acquired_counter+1)) / 1e3
-        Curr = np.random.randint(1, 10000, 2*(acquired_counter+1)) / 1e7
-        sense1, sense2 = [], []
-        for i in range(0, 2*(acquired_counter+1), 2):
-            sense1 += [V[i], Curr[i]]
-            sense2 += [V[i+1], Curr[i+1]]
+        V = np.random.randint(1, 10000, 2) / 1e3
+        Curr = np.random.randint(1, 10000, 2) / 1e7
+        sense1, sense2 = [V[0], Curr[0]], [V[1], Curr[1]]
         return np.array(sense1), np.array(sense2)
-    
-    
-    def sense(self) -> np.ndarray:
+        
+        
+    def sense(self, acquire_attempts: int = 1000) -> float:
         """Read sense data from the instruments. Returns resistance array with resistances
         which haven't been read yet.
+        
+        Args:
+            acquire_attempts (int, optional): Number of attempts to communicate with the instrument
+                and acquire sense data. Defaults to 1000.
 
         Returns:
             resistance (float): First resistance in the queue.
         """
-        if self.acquired_counter != self.trigger_count:  # Skips acquire if the queue is full
-            while time.time() < self.last_sense_time + self.trigger_interval:
-                time.sleep(0.1 * self.trigger_interval)  # Skipping time to match instrument trigger
+        # Calculating time to sleep between acquire attempts
+        if self.trigger_interval > 10e-3:
+            sleep_time = 1e-3
+        else:
+            sleep_time = 0.1 * self.trigger_interval
+        if self.acquired_counter != self.trigger_count:  # Skip acquire if queue is full
             if self.sim:
                 sense1, sense2 = self._random_sense(self.acquired_counter)
             else:
-                for _ in range(500):
-                    sense_data = self.A.get_sense_data()
+                # Acquire
+                for _ in range(acquire_attempts):
+                    sense_data = self.A.get_sense_data(offset=self.acquired_counter)
                     if sense_data is not None:
                         break
-                    time.sleep(0.1 * self.trigger_interval)
+                    time.sleep(sleep_time)
                 if sense_data is None:
                     return 'Cant obtain sense data!'
                 if isinstance(sense_data, str):
@@ -248,18 +255,17 @@ class B2902B_1T1R_32x8_driver:
                 else:
                     sense1, sense2 = sense_data
                 # TODO Save WL data
-            self.last_sense_time = time.time()
             if self.read_side == 1:
-                V = sense1[::2]
-                Curr = sense1[1::2]
+                primary_sense = sense1
             elif self.read_side == 2:
-                V = sense2[::2]
-                Curr = sense2[1::2]
+                primary_sense = sense2
+            V = primary_sense[::2]
+            Curr = primary_sense[1::2]
             R = np.abs(V / Curr)
             print(f'Driver: V = {V}, curr = {Curr}')
-            for r in R[self.acquired_counter:]:
+            for r in R:
                 self.queue.append(r)
-            self.acquired_counter = len(R)
+            self.acquired_counter += len(R)
         try:
             R_sent = self.queue.pop(0)
             print(f'Driver: R_sent = {R_sent}')
@@ -356,8 +362,6 @@ class B2902B_1T1R_32x8_driver:
         self.A.initiate()
         self.B.SMU1.initiate()
         self.A.arm()
-        time.sleep(self.trigger_interval)
-        self.last_sense_time = time.time()
         return True, response + 'SMU_IV_DC was configured'
     
     
@@ -445,8 +449,6 @@ class B2902B_1T1R_32x8_driver:
         self.A.initiate()
         self.B.SMU1.initiate()
         self.A.arm()
-        time.sleep(self.trigger_interval)
-        self.last_sense_time = time.time()
         if apply_voltage != 0:
             self.sense()  # Skip first result
         sense_data = self.sense()
@@ -533,6 +535,4 @@ class B2902B_1T1R_32x8_driver:
         self.A.initiate()
         self.B.SMU1.initiate()
         self.A.arm()
-        time.sleep(self.trigger_interval)
-        self.last_sense_time = time.time()
         return True, response + 'SMU_pulsed_retention was configured'

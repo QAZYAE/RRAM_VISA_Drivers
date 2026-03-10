@@ -231,20 +231,27 @@ class SMU(VISA_module):
         )
         
         
-    def get_sense_data(self, latest: bool = False) -> Union[np.ndarray, str, None]:
+    def get_sense_data(self, offset: int = 0) -> Union[np.ndarray, str, None]:
         """Return the array data, format is specified by B2902B.set_data_format().
         The data is not cleared until the .initiate() method is executed.
 
         Args:
-            latest (bool, optional): If True, returns the latest measurement data. 
-                Defaults to False.
+            offset (int, optional): Indicates the beginning of the data received. The index is from 
+                0 to maximum (depends on the buffer state). Defaults to 0 (All data is recieved).
+                If offset is `-1`, latest data entry is recieved.
 
         Returns:
             data (np.ndarray | str | None): Data specified by B2902B.set_data_format(). 
                 Returns error if an error occured, returns None if the buffer is empty.
         """
-        lat = ':latest' if latest else ''
-        flag, response = self.query_resp(f'sense{self.ch}:data{lat}?', 'Getting sense data')
+        if not isinstance(offset, int) or offset < -1:
+            return f'ERROR: {self.resp} invalid offset.'
+        lat = ':latest' if offset == -1 else ''
+        if offset == 0 or offset == -1:
+            off = ''
+        else:
+            off = f' {offset}'
+        flag, response = self.query_resp(f'sense{self.ch}:data{lat}?{off}', 'Getting sense data')
         if flag:
             array = np.array(response.split(','), dtype=float)
             if array[0] in [9.91e+37, 9.90e+37, 9.90e-37]:

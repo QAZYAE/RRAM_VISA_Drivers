@@ -11,7 +11,7 @@ from RRAM_VISA_Drivers.Switch_drivers import Keysight_34980A_1T1R_32x8
 
 
 
-class CID_1T1R_32x8_switched(B2902B_1T1R_32x8_driver):
+class ITC_1T1R_32x8_switched(B2902B_1T1R_32x8_driver):
     """Driver for measuring 1T1R 32x8 crossbar arrays with a switch unit.
     """
     sim: str = False  # True for simulation mode

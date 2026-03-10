@@ -8,7 +8,7 @@ from RRAM_VISA_Drivers.SMU_drivers import B2902B_1T1R_32x8_driver
 
 
 
-class CID_1T1R_32x8_probe_station(B2902B_1T1R_32x8_driver):
+class ITC_1T1R_32x8_probe_station(B2902B_1T1R_32x8_driver):
     """Driver for measuring 1T1R 32x8 crossbar arrays without a switch unit.
     """
     sim: str = False

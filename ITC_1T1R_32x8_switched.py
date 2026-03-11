@@ -58,7 +58,7 @@ class ITC_1T1R_32x8_switched(B2902B_1T1R_32x8_driver):
             resource=Switch_res, 
             config_path=os.path.join(os.getcwd(), 'RRAM_VISA_Drivers', 'config', 'Keysight_34980A_1T1R_32x8.json')
         )
-        print('CID_1T1R_32x8_switched init success')
+        print('ITC_1T1R_32x8_switched init success')
         
         
     def get_tech_data(self) -> str:

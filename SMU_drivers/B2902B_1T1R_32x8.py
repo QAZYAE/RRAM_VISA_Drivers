@@ -77,6 +77,8 @@ class B2902B_1T1R_32x8_driver:
         resps.append(self.B.SMU1.set_arm_external(pin=1))  # todo: Вынести номер пина в файл конфигурации
         resps.append(self.A.set_external_trigger_link(pin=1, trigger_layer='arm', function='output', channel=1))
         resps.append(self.B.set_external_trigger_link(pin=1, trigger_layer='arm', function='input', channel=1))
+        resps.append(self.A.set_external_trigger_link(pin=2, trigger_layer='trigger', function='output', channel=1))
+        resps.append(self.B.set_external_trigger_link(pin=2, trigger_layer='trigger', function='input', channel=1))
         for r in resps:
             if r.startswith('ERROR'):
                 print('B2902B 1T1R 32x8 driver init ERROR')
@@ -206,12 +208,9 @@ class B2902B_1T1R_32x8_driver:
         return flag, '\n'.join(resps)
     
     
-    def _random_sense(self, acquired_counter: int) -> tuple[np.ndarray]:
+    def _random_sense(self) -> tuple[np.ndarray]:
         """Generates random sense samples in format (Voltage, Current) with size=acquired_counter+1
             (Size is the number of (Voltage, Current) pairs)
-
-        Args:
-            acquired_counter (int): acquired counter for previous .sense() operation.
 
         Returns:
             sense1, sense2 (tuple[np.ndarray]): sense samples for two channels.
@@ -222,13 +221,14 @@ class B2902B_1T1R_32x8_driver:
         return np.array(sense1), np.array(sense2)
         
         
-    def sense(self, acquire_attempts: int = 1000) -> float:
+    def sense(self, acquire_attempts: int = 1000, trigger: bool = False) -> Union[float, str]:
         """Read sense data from the instruments. Returns resistance array with resistances
         which haven't been read yet.
         
         Args:
             acquire_attempts (int, optional): Number of attempts to communicate with the instrument
                 and acquire sense data. Defaults to 1000.
+            trigger (bool, optional): If True, sends trigger command before acquire.
 
         Returns:
             resistance (float): First resistance in the queue.
@@ -240,8 +240,11 @@ class B2902B_1T1R_32x8_driver:
             sleep_time = 0.1 * self.trigger_interval
         if self.acquired_counter != self.trigger_count:  # Skip acquire if queue is full
             if self.sim:
-                sense1, sense2 = self._random_sense(self.acquired_counter)
+                sense1, sense2 = self._random_sense()
             else:
+                # Trigger
+                if trigger:
+                    self.A.trigger()
                 # Acquire
                 for _ in range(acquire_attempts):
                     sense_data = self.A.get_sense_data(offset=self.acquired_counter)
@@ -261,8 +264,12 @@ class B2902B_1T1R_32x8_driver:
                 primary_sense = sense2
             V = primary_sense[::2]
             Curr = primary_sense[1::2]
-            R = np.abs(V / Curr)
-            print(f'Driver: V = {V}, curr = {Curr}')
+            R_pm = V / Curr  # Can be < 0 
+            if R_pm < 0 and np.abs(Curr) < 1e-6:
+                R = 1e6  # 1 MOhm
+            else:
+                R = np.abs(R_pm)
+            print(f'Driver: V = {V}, curr = {Curr}, R = {R}')
             for r in R:
                 self.queue.append(r)
             self.acquired_counter += len(R)
@@ -272,6 +279,12 @@ class B2902B_1T1R_32x8_driver:
             return R_sent
         except IndexError:
             return 'Sense queue is empty!'
+        
+        
+    def trigger(self) -> None:
+        """Send immediate trigger, skip one acquire value"""
+        self.A.trigger()
+        self.acquired_counter += 1
         
         
     def config_iv_dc(
@@ -455,6 +468,92 @@ class B2902B_1T1R_32x8_driver:
         if isinstance(sense_data, str):
             return False, response + '\n' + sense_data, 0
         return True, response, sense_data
+    
+    
+    def config_std(
+        self,
+        pulse_width: float,
+        pulse_sequence: list[float],
+        read_flags: list[bool],
+        current_compliance: float,
+        sign: int = 1
+    ) -> tuple[bool, str]:
+        """Configure std mode (apply pulse + read pulse). WARNING: Method doesn't connect the 
+        crossbar cell, it should be connected via .connect_cell() method.
+
+        Args:
+            pulse_width (float): Pulse width (seconds).
+            pulse_sequence (list[float]): Pulse sequence, read pulses are also included here (Volts).
+            read_flags (list[bool]): The flag is True if the pulse in the pulse sequence in a read pulse.
+            current_compliance (float): Current compliance (Amperes).
+            sign (int, optional): Side where sweep voltage is applied: 1 -- 'BL', 0 -- 'NL'. 
+                Defaults to 1.
+
+        Returns:
+            tuple[bool, str]: Good_config_flag (True if instruments were
+            successfully configured), response or error.
+        """
+        if pulse_width < 100e-6:
+            response = 'WARNING: Too short pulse width. The interval is set to 100us (min value)\n\t'
+            pulse_width = 100e-6
+            self.trigger_interval = 5 * pulse_width
+        else:
+            response = ''
+            self.trigger_interval = 5 * pulse_width
+        self.trigger_count = len(pulse_sequence)
+        self.acquired_counter = 0
+        self.queue = []
+        resps = []  # Response list
+        # Clearing
+        resps.append(self.A.clear())
+        resps.append(self.B.clear())
+        resps.append(self.A.wait_for_idle(wait_interval=0.1*self.trigger_interval))
+        resps.append(self.B.wait_for_idle(wait_interval=0.1*self.trigger_interval))
+        # Triggers and source shapes
+        for smu in [self.A.SMU1, self.A.SMU2, self.B.SMU1]:
+            resps.append(smu.set_measurement_aperture(aperture=0.4*pulse_width))
+        for smu in [self.A.SMU1, self.A.SMU2]:
+            resps.append(smu.set_trigger_BUS(self.trigger_count, acquire_delay=0.3*pulse_width))
+            resps.append(smu.set_source_shape('pulse'))
+            resps.append(smu.set_pulse_config(width=pulse_width))
+        resps.append(self.B.SMU1.set_source_shape('DC'))
+        resps.append(self.B.SMU1.set_trigger_external(pin=2, count=self.trigger_count, acquire_delay=0.3*pulse_width))
+        # Voltage config
+        self.read_side = 1  # Read on reset
+        smu1_seq, smu2_seq = [], []
+        for pulse, read_flag in zip(pulse_sequence, read_flags):
+            if read_flag:
+                smu1_seq.append(pulse)
+                smu2_seq.append(0)
+            else:
+                if sign:
+                    smu1_seq.append(pulse)
+                    smu2_seq.append(0)
+                else:
+                    smu1_seq.append(0)
+                    smu2_seq.append(pulse)
+        resps.append(self.A.SMU1.set_list_voltage(smu1_seq, current_compliance=current_compliance))
+        resps.append(self.A.SMU2.set_list_voltage(smu2_seq, current_compliance=current_compliance))
+        resps.append(self.B.SMU1.set_constant_voltage(voltage=GATE_VOLTAGE, current_compliance=1e-6))
+        resps.append(self.B.SMU1.set_base_voltage_immediate(voltage=GATE_VOLTAGE, current_compliance=1e-6))
+        # Checking if configuration is set
+        bad_config_flag = False
+        for resp in resps:
+            if resp.startswith('ERROR'):
+                response += '\n' + resp
+                bad_config_flag = True
+        for inst in [self.A, self.B]:
+            err = inst.get_errors()
+            if err is not None:
+                response += '\t'.join(err)
+                bad_config_flag = True
+        if bad_config_flag:
+            return False, response
+        # Apply the experiment
+        self.A.initiate()
+        self.B.SMU1.initiate()
+        self.A.arm()
+        return True, response + 'SMU_std was configured'
     
     
     def config_pulsed_retention(

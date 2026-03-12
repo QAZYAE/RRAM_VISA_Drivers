@@ -69,7 +69,7 @@ class B2902B_1T1R_32x8_driver:
             resps.append(inst.set_standby_zero())
             resps.append(inst.set_output_state('on'))
         # Configuring data output
-        resps.append(self.A.set_data_format('voltage,current'))
+        resps.append(self.A.set_data_format('voltage,current,time'))
         resps.append(self.B.set_data_format('voltage,current'))
         # Configuring triggers: Arm trigger is linked via pin 1 on D-Sub 25 connector
         resps.append(self.A.SMU1.set_arm_BUS())
@@ -219,11 +219,12 @@ class B2902B_1T1R_32x8_driver:
         """
         V = np.random.randint(1, 10000, 2) / 1e3
         Curr = np.random.randint(1, 10000, 2) / 1e7
-        sense1, sense2 = [V[0], Curr[0]], [V[1], Curr[1]]
+        timestamp = self.acquired_counter * self.trigger_interval
+        sense1, sense2 = [V[0], Curr[0], timestamp], [V[1], Curr[1], timestamp]
         return np.array(sense1), np.array(sense2)
         
         
-    def sense(self, acquire_attempts: int = 1000, trigger: bool = False) -> Union[float, str]:
+    def sense(self, acquire_attempts: int = 1000, trigger: bool = False) -> Union[tuple[float, float], str]:
         """Read sense data from the instruments. Returns resistance array with resistances
         which haven't been read yet.
         
@@ -264,17 +265,18 @@ class B2902B_1T1R_32x8_driver:
                 primary_sense = sense1
             elif self.read_side == 2:
                 primary_sense = sense2
-            V = primary_sense[::2]
-            Curr = primary_sense[1::2]
+            V = primary_sense[0::3]
+            Curr = primary_sense[1::3]
+            timestamp = self.exp_start_time + primary_sense[2::3]
             R = np.abs(V / Curr) 
-            print(f'Driver: V = {V}, curr = {Curr}, R = {R}')
-            for r in R:
-                self.queue.append(r)
+            print(f'Driver: V = {V}, curr = {Curr}, R = {R}, Time={timestamp}')
+            for r, t, v, cur in zip(R, timestamp, V, Curr):
+                self.queue.append((r, t, v, cur))
             self.acquired_counter += len(R)
         try:
-            R_sent = self.queue.pop(0)
-            print(f'Driver: R_sent = {R_sent}')
-            return R_sent
+            data_to_send = self.queue.pop(0)
+            print(f'Driver: Sent data = {data_to_send}')
+            return data_to_send  # Tuple[R, time]
         except IndexError:
             return 'Sense queue is empty!'
         
@@ -373,6 +375,7 @@ class B2902B_1T1R_32x8_driver:
         self.A.initiate()
         self.B.SMU1.initiate()
         self.A.arm()
+        self.exp_start_time = time.time()
         return True, response + 'SMU_IV_DC was configured'
     
     
@@ -460,6 +463,7 @@ class B2902B_1T1R_32x8_driver:
         self.A.initiate()
         self.B.SMU1.initiate()
         self.A.arm()
+        self.exp_start_time = time.time()
         if apply_voltage != 0:
             self.sense()  # Skip first result
         sense_data = self.sense()
@@ -551,6 +555,7 @@ class B2902B_1T1R_32x8_driver:
         self.A.initiate()
         self.B.SMU1.initiate()
         self.A.arm()
+        self.exp_start_time = time.time()
         return True, response + 'SMU_std was configured'
     
     
@@ -632,4 +637,5 @@ class B2902B_1T1R_32x8_driver:
         self.A.initiate()
         self.B.SMU1.initiate()
         self.A.arm()
+        self.exp_start_time = time.time()
         return True, response + 'SMU_pulsed_retention was configured'

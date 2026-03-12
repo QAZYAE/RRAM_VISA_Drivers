@@ -420,7 +420,7 @@ class SMU(VISA_module):
             ';:'.join([f'trigger{self.ch}:source EXT{pin}',
                        f'trigger{self.ch}:count {count}',
                        f'trigger{self.ch}:acquire:delay {acquire_delay}',
-                       f'trigger{self.ch}:transiont:delay {transient_delay}']),
+                       f'trigger{self.ch}:transient:delay {transient_delay}']),
             f'TRIGGER trigger source is set to External, count = {count}, D-Sub pin: {pin}, ' + \
                 f'acquire_delay = {acquire_delay} s, transient_delay = {transient_delay} s'
         )

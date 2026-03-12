@@ -177,6 +177,8 @@ class B2902B_1T1R_32x8_driver:
         """
         resps = []  # Response list
         flag = True
+        resps.append(self.A.clear())
+        resps.append(self.B.clear())
         resps.append(self.A.set_output_state('off'))
         resps.append(self.B.set_output_state('off'))
         for smu in [self.A.SMU1, self.A.SMU2, self.B.SMU1]:
@@ -264,11 +266,7 @@ class B2902B_1T1R_32x8_driver:
                 primary_sense = sense2
             V = primary_sense[::2]
             Curr = primary_sense[1::2]
-            R_pm = V / Curr  # Can be < 0 
-            if R_pm < 0 and np.abs(Curr) < 1e-6:
-                R = 1e6  # 1 MOhm
-            else:
-                R = np.abs(R_pm)
+            R = np.abs(V / Curr) 
             print(f'Driver: V = {V}, curr = {Curr}, R = {R}')
             for r in R:
                 self.queue.append(r)

@@ -145,14 +145,17 @@ class ITC_1T1R_32x8_switched(B2902B_1T1R_32x8_driver):
         flag, resp = self.standby()
         resps = [resp]  # Response list
         if not flag:
+            resps.append(self.A.clear())
+            resps.append(self.B.clear())
             resps.append(self.A.set_output_state('off'))
             resps.append(self.B.set_output_state('off'))
-            resps.append(self.switch.standby())
         for smu in [self.A.SMU1, self.A.SMU2, self.B.SMU1]:
             resps.append(smu.set_base_voltage_immediate(0, current_compliance=1e-8))
         for r in resps:
             if r.startswith('ERROR'):
                 flag = False
+        if not flag:
+            resps.append(self.switch.standby())
         return flag, '\n'.join(resps)
         
         

@@ -74,6 +74,22 @@ class SMU(VISA_module):
         return self.write_resp(f'output{self.ch}:off:mode zero', 'Standby mode is set to 0V')
     
     
+    def set_smu_mode(self, mode: str = 'voltage') -> str:
+        """Set SMU mode: `voltage` for applying voltage and measuring current; `current` for applying 
+            current and measuring voltage.
+
+        Args:
+            mode (str, optional): SMU mode: voltage|current. Defaults to 'voltage'.
+
+        Returns:
+            response (str): Command response | error if an error occured.
+        """
+        if mode.lower() not in ['voltage', 'current']:
+            return f'ERROR: {self.resp} Invalid SMU mode. Valid values: voltage|current (str).'
+        return self.write_resp(f'source{self.ch}:function:mode {mode}',
+                               f'Output mode is set to {mode}')
+    
+    
     def set_source_shape(self, shape: str = 'DC') -> str:
         """Set SMU output shape: DC or pulse.
 
@@ -228,6 +244,25 @@ class SMU(VISA_module):
             ';:'.join([f'sense{self.ch}:current:aperture:auto off',
                        f'sense{self.ch}:current:aperture {aperture}']),    
             f'Integration time is set to {aperture} s.'
+        )
+        
+        
+    def set_multimeter_mode(self, voltage_compliance: float = 1) -> str:
+        """Set multimeter mode for voltage measurements.
+
+        Args:
+            voltage_compliance (float, optional): Voltage compliance (Volts). Defaults to 1.
+
+        Returns:
+            response (str): Command response | error if an error occured.
+        """
+        return self.write_resp(
+            ';:'.join([f'source{self.ch}:function:mode current'
+                       f'source{self.ch}:current:mode fix'
+                       f'source{self.ch}:current:level:triggered:amplitude 0'
+                       f'source{self.ch}:current:level:immediate 0'
+                       f'sense{self.ch}:voltage:DC:protection:level {voltage_compliance}']),
+            'SMU is set to multimeter mode for voltage measurement'
         )
         
         

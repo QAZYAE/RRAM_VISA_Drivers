@@ -18,6 +18,13 @@ _sign = {  # Sign dict for applying voltage to BL(reset) and NL(set)
 
 GATE_VOLTAGE = 3.3  # Voltage applied to transistor gate
 
+SMU_CONFIG = {  # key: (B2902B, SMU)
+    'BL': ('A', 1),  # Reset
+    'NL': ('A', 2),  # Set
+    'Gate': ('B', 2),  # Gate voltage
+    'Temp': ('B', 1)  # Temperature
+}
+
 
 class B2902B_1T1R_32x8_driver:
     """Driver for measuring 1T1R 32x8 crossbar arrays
@@ -49,6 +56,13 @@ class B2902B_1T1R_32x8_driver:
         # Creating driver instances for the instruments
         self.A = B2902B(resource=B2902B_A_res, instrument_name='B2902B_A')  # Controls BL and NL
         self.B = B2902B(resource=B2902B_B_res, instrument_name='B2902B_B')  # Controls WL
+        # Config
+        if SMU_CONFIG['Gate'][1] == 1:
+            self.gate_smu = self.B.SMU1
+            self.temp_smu = self.B.SMU2
+        else:
+            self.gate_smu = self.B.SMU2
+            self.temp_smu = self.B.SMU1
         # Beeping
         self.A.beep(frequency=1000, time=0.2)
         time.sleep(0.2)
@@ -68,6 +82,8 @@ class B2902B_1T1R_32x8_driver:
             resps.append(inst.memory_reset())
             resps.append(inst.set_standby_zero())
             resps.append(inst.set_output_state('on'))
+        # Setting multimeter mode for temperature smu
+        resps.append(self.temp_smu.set_multimeter_mode(voltage_compliance=1))
         # Configuring data output
         resps.append(self.A.set_data_format('voltage,current,time'))
         resps.append(self.B.set_data_format('voltage,current'))
@@ -75,6 +91,7 @@ class B2902B_1T1R_32x8_driver:
         resps.append(self.A.SMU1.set_arm_BUS())
         resps.append(self.A.SMU2.set_arm_BUS())
         resps.append(self.B.SMU1.set_arm_external(pin=1))  # todo: Вынести номер пина в файл конфигурации
+        resps.append(self.B.SMU2.set_arm_external(pin=1))
         resps.append(self.A.set_external_trigger_link(pin=1, trigger_layer='arm', function='output', channel=1))
         resps.append(self.B.set_external_trigger_link(pin=1, trigger_layer='arm', function='input', channel=1))
         resps.append(self.A.set_external_trigger_link(pin=2, trigger_layer='trigger', function='output', channel=1))
@@ -113,7 +130,7 @@ class B2902B_1T1R_32x8_driver:
         resps = []
         resps.append(self.A.clear())
         resps.append(self.B.clear())
-        resps.append(self.B.SMU1.set_base_voltage_immediate(0, current_compliance=1e-6))
+        resps.append(self.gate_smu.set_base_voltage_immediate(0, current_compliance=1e-6))
         self.acquired_counter = 0
         for r in resps:
             if r.startswith('ERROR'):
@@ -142,7 +159,7 @@ class B2902B_1T1R_32x8_driver:
         resps = []  # Response list
         resps.append(self.A.clear())
         resps.append(self.B.clear())
-        resps.append(self.B.SMU1.set_base_voltage_immediate(0, current_compliance=1e-6))
+        resps.append(self.gate_smu.set_base_voltage_immediate(0, current_compliance=1e-6))
         resps.append(self.A.set_output_state('off'))
         resps.append(self.B.set_output_state('off'))
         resps.append(self.A.beep(frequency=1200, time=0.2))
@@ -181,7 +198,7 @@ class B2902B_1T1R_32x8_driver:
         resps.append(self.B.clear())
         resps.append(self.A.set_output_state('off'))
         resps.append(self.B.set_output_state('off'))
-        for smu in [self.A.SMU1, self.A.SMU2, self.B.SMU1]:
+        for smu in [self.A.SMU1, self.A.SMU2, self.gate_smu]:
             resps.append(smu.set_base_voltage_immediate(0, current_compliance=1e-6))
         for r in resps:
             if r.startswith('ERROR'):
@@ -210,17 +227,23 @@ class B2902B_1T1R_32x8_driver:
         return flag, '\n'.join(resps)
     
     
-    def _random_sense(self) -> tuple[np.ndarray]:
+    def _random_sense(self, include_time: bool = True) -> tuple[np.ndarray]:
         """Generates random sense samples in format (Voltage, Current) with size=acquired_counter+1
             (Size is the number of (Voltage, Current) pairs)
+            
+        Args:
+            include_time (bool, optional): If True, includes timestamp in the sense data. Defaults to True.
 
         Returns:
             sense1, sense2 (tuple[np.ndarray]): sense samples for two channels.
         """
         V = np.random.randint(1, 10000, 2) / 1e3
         Curr = np.random.randint(1, 10000, 2) / 1e7
-        timestamp = self.acquired_counter * self.trigger_interval
-        sense1, sense2 = [V[0], Curr[0], timestamp], [V[1], Curr[1], timestamp]
+        if include_time:
+            timestamp = self.acquired_counter * self.trigger_interval
+            sense1, sense2 = [V[0], Curr[0], timestamp], [V[1], Curr[1], timestamp]
+        else:
+            sense1, sense2 = [V[0], Curr[0]], [V[1], Curr[1]]
         return np.array(sense1), np.array(sense2)
         
         
@@ -244,23 +267,31 @@ class B2902B_1T1R_32x8_driver:
         if self.acquired_counter != self.trigger_count:  # Skip acquire if queue is full
             if self.sim:
                 sense1, sense2 = self._random_sense()
+                sense1_B, sense2_B = self._random_sense(include_time=False)
             else:
                 # Trigger
                 if trigger:
                     self.A.trigger()
                 # Acquire
                 for _ in range(acquire_attempts):
-                    sense_data = self.A.get_sense_data(offset=self.acquired_counter)
-                    if sense_data is not None:
+                    sense_data_A = self.A.get_sense_data(offset=self.acquired_counter)  # sense_ch1, sense_ch2
+                    sense_data_B = self.B.get_sense_data(offset=self.acquired_counter)  # sense_ch1, sense_ch2
+                    if (sense_data_A is not None and sense_data_B is not None and
+                        len(sense_data_A[0]) == len(sense_data_B[0]) and
+                        len(sense_data_A[1]) == len(sense_data_B[1])):
                         break
                     time.sleep(sleep_time)
-                if sense_data is None:
+                if sense_data_A is None or sense_data_B is None:
                     return 'Cant obtain sense data!'
-                if isinstance(sense_data, str):
-                    return sense_data
+                if isinstance(sense_data_A, str):
+                    return sense_data_A
+                if isinstance(sense_data_B, str):
+                    return sense_data_B
                 else:
-                    sense1, sense2 = sense_data
+                    sense1, sense2 = sense_data_A
+                    sense1_B, sense2_B = sense_data_B
                 # TODO Save WL data
+            # Memristor data
             if self.read_side == 1:
                 primary_sense = sense1
             elif self.read_side == 2:
@@ -269,13 +300,21 @@ class B2902B_1T1R_32x8_driver:
             Curr = primary_sense[1::3]
             timestamp = self.exp_start_time + primary_sense[2::3]
             R = np.abs(V / Curr) 
-            print(f'Driver: V = {V}, curr = {Curr}, R = {R}, Time={timestamp}')
-            for r, t, v, cur in zip(R, timestamp, V, Curr):
-                self.queue.append((r, t, v, cur))
+            # Temperature and WL
+            if SMU_CONFIG['Gate'][1] == 1:
+                # sense_gate = sense1_B
+                sense_temp = sense2_B
+            else:
+                # sense_gate = sense2_B
+                sense_temp = sense1_B
+            V_temp = sense_temp[0::2]
+            print(f'Driver: V = {V}, curr = {Curr}, R = {R}, Time={timestamp}, V_temp={V_temp}')
+            for r, t, v, cur, v_t in zip(R, timestamp, V, Curr, V_temp):
+                self.queue.append((r, t, v, cur, V_temp))
             self.acquired_counter += len(R)
         try:
             data_to_send = self.queue.pop(0)
-            print(f'Driver: Sent data = {data_to_send}')
+            # print(f'Driver: Sent data = {data_to_send}')
             return data_to_send  # Tuple[R, time]
         except IndexError:
             return 'Sense queue is empty!'
@@ -339,7 +378,7 @@ class B2902B_1T1R_32x8_driver:
         resps.append(self.A.wait_for_idle())
         resps.append(self.B.wait_for_idle())
         # Configuring triggers and source shapes
-        for smu in [self.A.SMU1, self.A.SMU2, self.B.SMU1]:
+        for smu in [self.A.SMU1, self.A.SMU2, self.gate_smu, self.temp_smu]:
             resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
                                                acquire_delay=0.3*self.trigger_interval))
             resps.append(smu.set_measurement_aperture(aperture=0.4*self.trigger_interval))
@@ -356,8 +395,8 @@ class B2902B_1T1R_32x8_driver:
         resps.append(sweep_smu.set_sweep_voltage(stop=v_stop, n_points=n_points, start=v_start, 
                                                  double=double, current_compliance=current_compliance))
         resps.append(zero_smu.set_constant_voltage(voltage=0, current_compliance=current_compliance))
-        resps.append(self.B.SMU1.set_constant_voltage(voltage=GATE_VOLTAGE, current_compliance=1e-6))
-        resps.append(self.B.SMU1.set_base_voltage_immediate(voltage=GATE_VOLTAGE, current_compliance=1e-6))
+        resps.append(self.gate_smu.set_constant_voltage(voltage=GATE_VOLTAGE, current_compliance=1e-6))
+        resps.append(self.gate_smu.set_base_voltage_immediate(voltage=GATE_VOLTAGE, current_compliance=1e-6))
         # Checking if configuration is set
         bad_config_flag = False
         for resp in resps:
@@ -373,7 +412,7 @@ class B2902B_1T1R_32x8_driver:
             return False, response
         # Start the experiment
         self.A.initiate()
-        self.B.SMU1.initiate()
+        self.B.initiate()
         self.A.arm()
         self.exp_start_time = time.time()
         return True, response + 'SMU_IV_DC was configured'
@@ -424,11 +463,11 @@ class B2902B_1T1R_32x8_driver:
         resps.append(self.A.wait_for_idle(wait_interval=0.1*self.trigger_interval))
         resps.append(self.B.wait_for_idle(wait_interval=0.1*self.trigger_interval))
         # Configuring triggers and source shapes
-        for smu in [self.A.SMU1, self.A.SMU2, self.B.SMU1]:
+        for smu in [self.A.SMU1, self.A.SMU2, self.gate_smu, self.temp_smu]:
             resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
                                                acquire_delay=0.3*pulse_width))
             resps.append(smu.set_measurement_aperture(aperture=0.4*pulse_width))
-        resps.append(self.B.SMU1.set_source_shape('DC'))
+        resps.append(self.gate_smu.set_source_shape('DC'))
         # Pulse mode for BL and NL
         for smu in [self.A.SMU1, self.A.SMU2]:
             resps.append(smu.set_source_shape('pulse'))
@@ -444,8 +483,8 @@ class B2902B_1T1R_32x8_driver:
         self.read_side = 1
         resps.append(self.A.SMU1.set_list_voltage(smu1_list, current_compliance=current_compliance))
         resps.append(self.A.SMU2.set_list_voltage(smu2_list, current_compliance=current_compliance))
-        resps.append(self.B.SMU1.set_constant_voltage(voltage=GATE_VOLTAGE, current_compliance=1e-6))
-        resps.append(self.B.SMU1.set_base_voltage_immediate(voltage=GATE_VOLTAGE, current_compliance=1e-6))
+        resps.append(self.gate_smu.set_constant_voltage(voltage=GATE_VOLTAGE, current_compliance=1e-6))
+        resps.append(self.gate_smu.set_base_voltage_immediate(voltage=GATE_VOLTAGE, current_compliance=1e-6))
         # Checking if configuration is set
         bad_config_flag = False
         for resp in resps:
@@ -461,7 +500,7 @@ class B2902B_1T1R_32x8_driver:
             return False, response, 0
         # Apply the experiment
         self.A.initiate()
-        self.B.SMU1.initiate()
+        self.B.initiate()
         self.A.arm()
         self.exp_start_time = time.time()
         if apply_voltage != 0:
@@ -512,14 +551,15 @@ class B2902B_1T1R_32x8_driver:
         resps.append(self.A.wait_for_idle(wait_interval=0.1*self.trigger_interval))
         resps.append(self.B.wait_for_idle(wait_interval=0.1*self.trigger_interval))
         # Triggers and source shapes
-        for smu in [self.A.SMU1, self.A.SMU2, self.B.SMU1]:
+        for smu in [self.A.SMU1, self.A.SMU2, self.gate_smu, self.gate_smu]:
             resps.append(smu.set_measurement_aperture(aperture=0.4*pulse_width))
         for smu in [self.A.SMU1, self.A.SMU2]:
             resps.append(smu.set_trigger_BUS(self.trigger_count, acquire_delay=0.3*pulse_width))
             resps.append(smu.set_source_shape('pulse'))
             resps.append(smu.set_pulse_config(width=pulse_width))
-        resps.append(self.B.SMU1.set_source_shape('DC'))
-        resps.append(self.B.SMU1.set_trigger_external(pin=2, count=self.trigger_count, acquire_delay=0.3*pulse_width))
+        for smu in [self.gate_smu, self.temp_smu]:
+            resps.append(smu.set_source_shape('DC'))
+            resps.append(smu.set_trigger_external(pin=2, count=self.trigger_count, acquire_delay=0.3*pulse_width))
         # Voltage config
         self.read_side = 1  # Read on reset
         smu1_seq, smu2_seq = [], []
@@ -536,8 +576,8 @@ class B2902B_1T1R_32x8_driver:
                     smu2_seq.append(pulse)
         resps.append(self.A.SMU1.set_list_voltage(smu1_seq, current_compliance=current_compliance))
         resps.append(self.A.SMU2.set_list_voltage(smu2_seq, current_compliance=current_compliance))
-        resps.append(self.B.SMU1.set_constant_voltage(voltage=GATE_VOLTAGE, current_compliance=1e-6))
-        resps.append(self.B.SMU1.set_base_voltage_immediate(voltage=GATE_VOLTAGE, current_compliance=1e-6))
+        resps.append(self.gate_smu.set_constant_voltage(voltage=GATE_VOLTAGE, current_compliance=1e-6))
+        resps.append(self.gate_smu.set_base_voltage_immediate(voltage=GATE_VOLTAGE, current_compliance=1e-6))
         # Checking if configuration is set
         bad_config_flag = False
         for resp in resps:
@@ -553,7 +593,7 @@ class B2902B_1T1R_32x8_driver:
             return False, response
         # Apply the experiment
         self.A.initiate()
-        self.B.SMU1.initiate()
+        self.B.initiate()
         self.A.arm()
         self.exp_start_time = time.time()
         return True, response + 'SMU_std was configured'
@@ -599,11 +639,12 @@ class B2902B_1T1R_32x8_driver:
         resps.append(self.A.wait_for_idle(wait_interval=0.1*self.trigger_interval))
         resps.append(self.B.wait_for_idle(wait_interval=0.1*self.trigger_interval))
         # Configuring triggers and source shapes
-        for smu in [self.A.SMU1, self.A.SMU2, self.B.SMU1]:
+        for smu in [self.A.SMU1, self.A.SMU2, self.gate_smu, self.temp_smu]:
             resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
                                                acquire_delay=0.3*pulse_width))
             resps.append(smu.set_measurement_aperture(aperture=0.4*pulse_width))
-        resps.append(self.B.SMU1.set_source_shape('DC'))
+        for smu in [self.gate_smu, self.temp_smu]:
+            resps.append(self.smu.set_source_shape('DC'))
         # Pulse mode for BL and NL
         for smu in [self.A.SMU1, self.A.SMU2]:
             resps.append(smu.set_source_shape('pulse'))
@@ -618,8 +659,8 @@ class B2902B_1T1R_32x8_driver:
             self.read_side = 2
         resps.append(read_smu.set_list_voltage([read_voltage] * n_pulses, current_compliance=current_compliance))
         resps.append(zero_smu.set_list_voltage([0] * n_pulses, current_compliance=current_compliance))
-        resps.append(self.B.SMU1.set_constant_voltage(voltage=GATE_VOLTAGE, current_compliance=1e-6))
-        resps.append(self.B.SMU1.set_base_voltage_immediate(voltage=GATE_VOLTAGE, current_compliance=1e-6))
+        resps.append(self.gate_smu.set_constant_voltage(voltage=GATE_VOLTAGE, current_compliance=1e-6))
+        resps.append(self.gate_smu.set_base_voltage_immediate(voltage=GATE_VOLTAGE, current_compliance=1e-6))
         # Checking if configuration is set
         bad_config_flag = False
         for resp in resps:
@@ -635,7 +676,7 @@ class B2902B_1T1R_32x8_driver:
             return False, response
         # Apply the experiment
         self.A.initiate()
-        self.B.SMU1.initiate()
+        self.B.initiate()
         self.A.arm()
         self.exp_start_time = time.time()
         return True, response + 'SMU_pulsed_retention was configured'

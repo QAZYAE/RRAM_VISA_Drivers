@@ -257,10 +257,10 @@ class SMU(VISA_module):
             response (str): Command response | error if an error occured.
         """
         return self.write_resp(
-            ';:'.join([f'source{self.ch}:function:mode current'
-                       f'source{self.ch}:current:mode fix'
-                       f'source{self.ch}:current:level:triggered:amplitude 0'
-                       f'source{self.ch}:current:level:immediate 0'
+            ';:'.join([f'source{self.ch}:function:mode current',
+                       f'source{self.ch}:current:mode fix',
+                       f'source{self.ch}:current:level:triggered:amplitude 0',
+                       f'source{self.ch}:current:level:immediate 0',
                        f'sense{self.ch}:voltage:DC:protection:level {voltage_compliance}']),
             'SMU is set to multimeter mode for voltage measurement'
         )

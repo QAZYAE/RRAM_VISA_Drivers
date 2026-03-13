@@ -247,7 +247,7 @@ class B2902B_1T1R_32x8_driver:
         return np.array(sense1), np.array(sense2)
         
         
-    def sense(self, acquire_attempts: int = 1000, trigger: bool = False) -> Union[tuple[float, float], str]:
+    def sense(self, acquire_attempts: int = 50, trigger: bool = False) -> Union[tuple[float, float], str]:
         """Read sense data from the instruments. Returns resistance array with resistances
         which haven't been read yet.
         
@@ -273,12 +273,14 @@ class B2902B_1T1R_32x8_driver:
                 if trigger:
                     self.A.trigger()
                 # Acquire
-                for _ in range(acquire_attempts):
+                for i in range(acquire_attempts):
+                    print('SENSE_ATTEMPT', i)
                     sense_data_A = self.A.get_sense_data(offset=self.acquired_counter)  # sense_ch1, sense_ch2
                     sense_data_B = self.B.get_sense_data(offset=self.acquired_counter)  # sense_ch1, sense_ch2
+                    print(sense_data_A, sense_data_B)
                     if (sense_data_A is not None and sense_data_B is not None and
-                        len(sense_data_A[0]) == len(sense_data_B[0]) and
-                        len(sense_data_A[1]) == len(sense_data_B[1])):
+                        len(sense_data_A[0])/3*2 == len(sense_data_B[0]) and
+                        len(sense_data_A[1])/3*2 == len(sense_data_B[1])):
                         break
                     time.sleep(sleep_time)
                 if sense_data_A is None or sense_data_B is None:
@@ -310,7 +312,7 @@ class B2902B_1T1R_32x8_driver:
             V_temp = sense_temp[0::2]
             print(f'Driver: V = {V}, curr = {Curr}, R = {R}, Time={timestamp}, V_temp={V_temp}')
             for r, t, v, cur, v_t in zip(R, timestamp, V, Curr, V_temp):
-                self.queue.append((r, t, v, cur, V_temp))
+                self.queue.append((r, t, v, cur, v_t))
             self.acquired_counter += len(R)
         try:
             data_to_send = self.queue.pop(0)
@@ -551,7 +553,7 @@ class B2902B_1T1R_32x8_driver:
         resps.append(self.A.wait_for_idle(wait_interval=0.1*self.trigger_interval))
         resps.append(self.B.wait_for_idle(wait_interval=0.1*self.trigger_interval))
         # Triggers and source shapes
-        for smu in [self.A.SMU1, self.A.SMU2, self.gate_smu, self.gate_smu]:
+        for smu in [self.A.SMU1, self.A.SMU2, self.gate_smu, self.temp_smu]:
             resps.append(smu.set_measurement_aperture(aperture=0.4*pulse_width))
         for smu in [self.A.SMU1, self.A.SMU2]:
             resps.append(smu.set_trigger_BUS(self.trigger_count, acquire_delay=0.3*pulse_width))
@@ -644,7 +646,7 @@ class B2902B_1T1R_32x8_driver:
                                                acquire_delay=0.3*pulse_width))
             resps.append(smu.set_measurement_aperture(aperture=0.4*pulse_width))
         for smu in [self.gate_smu, self.temp_smu]:
-            resps.append(self.smu.set_source_shape('DC'))
+            resps.append(smu.set_source_shape('DC'))
         # Pulse mode for BL and NL
         for smu in [self.A.SMU1, self.A.SMU2]:
             resps.append(smu.set_source_shape('pulse'))

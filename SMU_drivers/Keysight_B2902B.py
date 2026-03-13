@@ -236,6 +236,7 @@ class B2902B(VISA_instrument):
             arr2 = np.array(s2.split(','), dtype=float)
             if (arr1[0] in [9.91e+37, 9.90e+37, 9.90e-37] or
                 arr2[0] in [9.91e+37, 9.90e+37, 9.90e-37]):
+                print('b2920b_get_sense()', arr1, arr2)
                 return None
             return arr1, arr2
         return response

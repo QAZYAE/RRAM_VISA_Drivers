@@ -8,6 +8,7 @@ import pyvisa
 import time
 import numpy as np
 from typing import Union
+from RRAM_VISA_Drivers.VISA_utility import GeneralDriver
 from RRAM_VISA_Drivers.SMU_drivers import B2902B
 
 
@@ -26,7 +27,7 @@ SMU_CONFIG = {  # key: (B2902B, SMU)
 }
 
 
-class B2902B_1T1R_32x8_driver:
+class B2902B_1T1R_32x8_driver(GeneralDriver):
     """Driver for measuring 1T1R 32x8 crossbar arrays
     """
     trigger_interval: float = 100e-6  # Interval between triggers in seconds
@@ -52,6 +53,7 @@ class B2902B_1T1R_32x8_driver:
                 Initiate using :meth:`pyvisa.highlevel.ResourceManager.open_resource`).
                 If resource is None, the program simulates communication.
         """
+        super().__init__()
         self.sim = sim
         # Creating driver instances for the instruments
         self.A = B2902B(resource=B2902B_A_res, instrument_name='B2902B_A')  # Controls BL and NL
@@ -63,17 +65,13 @@ class B2902B_1T1R_32x8_driver:
         else:
             self.gate_smu = self.B.SMU2
             self.temp_smu = self.B.SMU1
-        # Beeping
-        self.A.beep(frequency=1000, time=0.2)
-        time.sleep(0.2)
-        self.B.beep(frequency=1200, time=0.2)
         # Checking connections and instrument types
         for inst, name in zip([self.A, self.B], 
                               ['B2902B_A', 'B2902B_B']):
             flag = inst.check_instument_connection()
             inst.get_errors()  # Clear error queue
             if not flag:
-                print('B2902B 1T1R 32x8 driver init ERROR')
+                self.logger.critical('B2902B 1T1R 32x8 driver init error!')
                 raise ConnectionError(f'Could not connect to an instrument: {name}')
         resps = []  # Response list
         # Resetting instruments 
@@ -98,16 +96,21 @@ class B2902B_1T1R_32x8_driver:
         resps.append(self.B.set_external_trigger_link(pin=2, trigger_layer='trigger', function='input', channel=1))
         for r in resps:
             if r.startswith('ERROR'):
-                print('B2902B 1T1R 32x8 driver init ERROR')
+                self.logger.error(f'B2902B 1T1R 32x8 driver init error!\n{r}')
                 raise ConnectionError(r)
         # Checking error queues
         for inst, name in zip([self.A, self.B], 
                               ['B2902B_A', 'B2902B_B']):
             err = inst.get_errors()
             if err is not None:
-                print('B2902B 1T1R 32x8 driver init ERROR')
+                self.logger.error('B2902B 1T1R 32x8 driver init error!')
+                self.logger.error(f'Instrument {name}:\n\t{"\n\t".join(err)}')
                 raise ConnectionError(f'Error in {name} error queue: {err}')
-        print('B2902B 1T1R 32x8 driver init success')
+        # Beeping
+        self.A.beep(frequency=1000, time=0.2)
+        time.sleep(0.2)
+        self.B.beep(frequency=1200, time=0.2)
+        self.logger.info('B2902B 1T1R 32x8 driver init success')
         
     
     def get_tech_data(self) -> str:
@@ -134,6 +137,7 @@ class B2902B_1T1R_32x8_driver:
         self.acquired_counter = 0
         for r in resps:
             if r.startswith('ERROR'):
+                self.logger.critical(f'Could not clear the instruments!\n\t{r}')
                 return False
         return True
     
@@ -168,6 +172,7 @@ class B2902B_1T1R_32x8_driver:
         # Checking errors
         for r in resps:
             if r.startswith('ERROR'):
+                self.logger.critical(f'Could not disconnect the instruments!\n\t{r}')
                 return False, r
         return True, 'VISA-instruments were disconnected'
     
@@ -200,9 +205,11 @@ class B2902B_1T1R_32x8_driver:
         resps.append(self.B.set_output_state('off'))
         for smu in [self.A.SMU1, self.A.SMU2, self.gate_smu]:
             resps.append(smu.set_base_voltage_immediate(0, current_compliance=1e-6))
+        self.logger.debug('\t' + '\t\n'.join(resps))
         for r in resps:
             if r.startswith('ERROR'):
                 flag = False
+                self.logger.info('Panic attempt failed!')
         return flag, '\n'.join(resps)
     
     
@@ -213,8 +220,10 @@ class B2902B_1T1R_32x8_driver:
             flag, response (tuple[bool, str]): Resolved flag (True if panic was resolved), 
             response or error.
         """
+        self.logger.critical('Panic!')
         resps = []
-        for _ in range(5):
+        for i in range(5):
+            self.logger.debug(f'Panic attempt {i}')
             flag, response = self._panic_attempt()
             resps.append(response)
             if flag:
@@ -224,6 +233,9 @@ class B2902B_1T1R_32x8_driver:
             self.B.get_errors()
             resps.append(self.A.set_output_state('on'))
             resps.append(self.B.set_output_state('on'))
+            self.logger.info('Panic resolved!')
+        else:
+            self.logger.error(f'Panic was not resolved!\n\t{"\n\t".join(resps)}')
         return flag, '\n'.join(resps)
     
     
@@ -272,28 +284,41 @@ class B2902B_1T1R_32x8_driver:
                 # Trigger
                 if trigger:
                     self.A.trigger()
-                # Acquire
+                    self.logger.debug('Sense: Trigger sent')
+                # ACQUIRE A
                 for i in range(acquire_attempts):
-                    print('SENSE_ATTEMPT', i)
                     sense_data_A = self.A.get_sense_data(offset=self.acquired_counter)  # sense_ch1, sense_ch2
-                    sense_data_B = self.B.get_sense_data(offset=self.acquired_counter)  # sense_ch1, sense_ch2
-                    print(sense_data_A, sense_data_B)
-                    if (sense_data_A is not None and sense_data_B is not None and
-                        len(sense_data_A[0])/3*2 == len(sense_data_B[0]) and
-                        len(sense_data_A[1])/3*2 == len(sense_data_B[1])):
+                    self.logger.debug(f'Sense_A: acquire attempt {i}: {sense_data_A}')
+                    if sense_data_A is not None:
                         break
                     time.sleep(sleep_time)
-                if sense_data_A is None or sense_data_B is None:
-                    return 'Cant obtain sense data!'
+                if sense_data_A is None:
+                    self.logger.error('Cant obtain sense_A data!')
+                    return 'Cant obtain sense_A data!'
                 if isinstance(sense_data_A, str):
+                    self.logger.error(f'Sense_A acquire error: {sense_data_A}')
                     return sense_data_A
+                # ACQUIRE B
+                for i in range(acquire_attempts):
+                    sense_data_B = self.B.get_sense_data(offset=self.acquired_counter)  # sense_ch1, sense_ch2
+                    self.logger.debug(f'Sense_B: acquire attempt {i}: {sense_data_B}')
+                    if (sense_data_B is not None and
+                        len(sense_data_A[0])/3*2 <= len(sense_data_B[0]) and  # At least equal amount of data acquired
+                        len(sense_data_A[1])/3*2 <= len(sense_data_B[1])):
+                        break
+                    time.sleep(sleep_time)
+                if sense_data_B is None:
+                    self.logger.error('Cant obtain sense_B data!')
+                    return 'Cant obtain sense_B data!'
                 if isinstance(sense_data_B, str):
+                    self.logger.error(f'Sense_B acquire error: {sense_data_B}')
                     return sense_data_B
-                else:
-                    sense1, sense2 = sense_data_A
-                    sense1_B, sense2_B = sense_data_B
+                self.logger.debug('Sense_A and sense_B acquired')
+                sense1, sense2 = sense_data_A
+                sense1_B, sense2_B = sense_data_B
                 # TODO Save WL data
-            # Memristor data
+            # PARSING DATA
+            # B data might be longer than A data
             if self.read_side == 1:
                 primary_sense = sense1
             elif self.read_side == 2:
@@ -309,16 +334,20 @@ class B2902B_1T1R_32x8_driver:
             else:
                 # sense_gate = sense2_B
                 sense_temp = sense1_B
-            V_temp = sense_temp[0::2]
-            print(f'Driver: V = {V}, curr = {Curr}, R = {R}, Time={timestamp}, V_temp={V_temp}')
-            for r, t, v, cur, v_t in zip(R, timestamp, V, Curr, V_temp):
-                self.queue.append((r, t, v, cur, v_t))
+            V_temp = sense_temp[0:len(R)*2:2]
+            Temp = V_temp
+            self.logger.debug(f'Sense_data acquired: V = {V}, curr = {Curr}, R = {R}, Time={timestamp}, V_temp={V_temp}, Temp={Temp}')
+            for r, t, v, cur, tem, v_t in zip(R, timestamp, V, Curr, Temp, V_temp):
+                self.queue.append((r, t, v, cur, tem, v_t))
             self.acquired_counter += len(R)
         try:
             data_to_send = self.queue.pop(0)
-            # print(f'Driver: Sent data = {data_to_send}')
+            self.logger.info(f'Data returned: {data_to_send}')
+            self.logger.info(f'Temperature: {data_to_send[4]} C')
+            print(f'Temperature: {data_to_send[4]} C')
             return data_to_send  # Tuple[R, time]
         except IndexError:
+            self.logger.error('Sense queue is empty!')
             return 'Sense queue is empty!'
         
         

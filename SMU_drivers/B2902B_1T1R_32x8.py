@@ -20,12 +20,6 @@ _sign = {  # Sign dict for applying voltage to BL(reset) and NL(set)
 
 GATE_VOLTAGE = 3.3  # Voltage applied to transistor gate
 
-SMU_CONFIG = {  # key: (B2902B, SMU)
-    'BL': ('A', 1),  # Reset
-    'NL': ('A', 2),  # Set
-    'Gate': ('B', 2),  # Gate voltage
-    'Temp': ('B', 1)  # Temperature
-}
 
 
 class B2902B_1T1R_32x8_driver(GeneralDriver):
@@ -60,7 +54,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         self.A = B2902B(resource=B2902B_A_res, instrument_name='B2902B_A')  # Controls BL and NL
         self.B = B2902B(resource=B2902B_B_res, instrument_name='B2902B_B')  # Controls WL
         # Config
-        if SMU_CONFIG['Gate'][1] == 1:
+        if self.settings['ITC_1T1R']['Gate_channel'] == '1':
             self.gate_smu = self.B.SMU1
             self.temp_smu = self.B.SMU2
         else:
@@ -260,7 +254,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         return np.array(sense1), np.array(sense2)
         
         
-    def sense(self, acquire_attempts: int = 50, trigger: bool = False) -> Union[tuple[float, float], str]:
+    def sense(self, acquire_attempts: int = 500, trigger: bool = False) -> Union[tuple[float, float], str]:
         """Read sense data from the instruments. Returns resistance array with resistances
         which haven't been read yet.
         
@@ -329,7 +323,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             timestamp = self.exp_start_time + primary_sense[2::3]
             R = np.abs(V / Curr) 
             # Temperature and WL
-            if SMU_CONFIG['Gate'][1] == 1:
+            if self.settings['ITC_1T1R']['Gate_channel'] == '1':
                 # sense_gate = sense1_B
                 sense_temp = sense2_B
             else:
@@ -370,10 +364,9 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             if pulse_width < 100e-6:
                 self.logger.info('Warning: Too short pulse width. The interval is set to 100us (min value)')
                 self.pulse_width = 100e-6
-                self.trigger_interval = 5 * self.pulse_width
             else:
                 self.pulse_width = pulse_width
-                self.trigger_interval = 5 * pulse_width
+            self.trigger_interval = float(self.settings['ITC_1T1R']['pulse_trigger_interval_factor']) * self.pulse_width
         else:
             raise RuntimeError(f'_config_init_values: unknown mode: {mode}')
         self.trigger_count = trigger_count

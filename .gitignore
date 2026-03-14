@@ -217,3 +217,4 @@ __marimo__/
 
 # Other
 resistance_map.npy
+*.log.*

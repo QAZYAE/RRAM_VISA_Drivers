@@ -10,6 +10,7 @@ import numpy as np
 from typing import Union
 from RRAM_VISA_Drivers.VISA_utility import GeneralDriver
 from RRAM_VISA_Drivers.SMU_drivers import B2902B
+from RRAM_VISA_Drivers.thermocouples import K_volt2temp
 
 
 _sign = {  # Sign dict for applying voltage to BL(reset) and NL(set)
@@ -255,7 +256,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             timestamp = self.acquired_counter * self.trigger_interval
             sense1, sense2 = [V[0], Curr[0], timestamp], [V[1], Curr[1], timestamp]
         else:
-            sense1, sense2 = [V[0], Curr[0]], [V[1], Curr[1]]
+            sense1, sense2 = [V[0]/1000, Curr[0]], [V[1]/1000, Curr[1]]
         return np.array(sense1), np.array(sense2)
         
         
@@ -335,7 +336,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                 # sense_gate = sense2_B
                 sense_temp = sense1_B
             V_temp = sense_temp[0:len(R)*2:2]
-            Temp = V_temp
+            Temp = K_volt2temp(V_temp)
             self.logger.debug(f'Sense_data acquired: V = {V}, curr = {Curr}, R = {R}, Time={timestamp}, V_temp={V_temp}, Temp={Temp}')
             for r, t, v, cur, tem, v_t in zip(R, timestamp, V, Curr, Temp, V_temp):
                 self.queue.append((r, t, v, cur, tem, v_t))

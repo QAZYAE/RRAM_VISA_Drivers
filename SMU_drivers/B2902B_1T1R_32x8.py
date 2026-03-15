@@ -72,11 +72,14 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         # Resetting instruments 
         for inst in [self.A, self.B]:
             resps.append(inst.clear())
-            resps.append(inst.memory_reset())
+            if eval(self.settings['ITC_1T1R']['memory_reset_on_start']):
+                resps.append(inst.memory_reset())
             resps.append(inst.set_standby_zero())
             resps.append(inst.set_output_state('on'))
         # Setting multimeter mode for temperature smu
         resps.append(self.temp_smu.set_multimeter_mode(voltage_compliance=1))
+        for smu in [self.A.SMU1, self.A.SMU2, self.gate_smu]:
+            resps.append(self.gate_smu.set_smu_mode('voltage'))
         # Configuring data output
         resps.append(self.A.set_data_format('voltage,current,time'))
         resps.append(self.B.set_data_format('voltage,current'))

@@ -86,8 +86,6 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         # Configuring triggers: Arm trigger is linked via pin 1 on D-Sub 25 connector
         resps.append(self.A.SMU1.set_arm_BUS())
         resps.append(self.A.SMU2.set_arm_BUS())
-        resps.append(self.B.SMU1.set_arm_external(pin=1))  # todo: Вынести номер пина в файл конфигурации
-        resps.append(self.B.SMU2.set_arm_external(pin=1))
         resps.append(self.A.set_external_trigger_link(pin=1, trigger_layer='arm', function='output', channel=1))
         resps.append(self.B.set_external_trigger_link(pin=1, trigger_layer='arm', function='input', channel=1))
         resps.append(self.A.set_external_trigger_link(pin=2, trigger_layer='trigger', function='output', channel=1))
@@ -257,7 +255,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         return np.array(sense1), np.array(sense2)
         
         
-    def sense(self, acquire_attempts: int = 500, trigger: bool = False) -> Union[tuple[float, float], str]:
+    def sense(self, acquire_attempts: int = 50, trigger: bool = False) -> Union[tuple[float, float], str]:
         """Read sense data from the instruments. Returns resistance array with resistances
         which haven't been read yet.
         
@@ -285,6 +283,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                     self.logger.debug('Sense: Trigger sent')
                 # ACQUIRE A
                 for i in range(acquire_attempts):
+                    self.logger.info(self.A.get_sense_data())
                     sense_data_A = self.A.get_sense_data(offset=self.acquired_counter)  # sense_ch1, sense_ch2
                     self.logger.debug(f'Sense_A: acquire attempt {i}: {sense_data_A}')
                     if sense_data_A is not None:
@@ -298,6 +297,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                     return sense_data_A
                 # ACQUIRE B
                 for i in range(acquire_attempts):
+                    self.logger.info(self.B.get_sense_data())
                     sense_data_B = self.B.get_sense_data(offset=self.acquired_counter)  # sense_ch1, sense_ch2
                     self.logger.debug(f'Sense_B: acquire attempt {i}: {sense_data_B}')
                     if (sense_data_B is not None and
@@ -445,6 +445,8 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                                                     acquire_delay=0.3*self.trigger_interval))
             self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.trigger_interval))
             self.resps.append(smu.set_source_shape('DC'))
+        self.resps.append(self.B.SMU1.set_arm_external(pin=1))  # todo: Вынести номер пина в файл конфигурации
+        self.resps.append(self.B.SMU2.set_arm_external(pin=1))
         # Configuring sweep
         if sign:  # Reset
             sweep_smu = self.A.SMU1
@@ -497,13 +499,15 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         # Configuring triggers and source shapes
         for smu in [self.A.SMU1, self.A.SMU2, self.gate_smu, self.temp_smu]:
             self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
-                                                    acquire_delay=0.3*pulse_width))
-            self.resps.append(smu.set_measurement_aperture(aperture=0.4*pulse_width))
+                                                    acquire_delay=0.3*self.pulse_width))
+            self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.pulse_width))
         self.resps.append(self.gate_smu.set_source_shape('DC'))
+        self.resps.append(self.B.SMU1.set_arm_external(pin=1))  # todo: Вынести номер пина в файл конфигурации
+        self.resps.append(self.B.SMU2.set_arm_external(pin=1))
         # Pulse mode for BL and NL
         for smu in [self.A.SMU1, self.A.SMU2]:
             self.resps.append(smu.set_source_shape('pulse'))
-            self.resps.append(smu.set_pulse_config(width=pulse_width))
+            self.resps.append(smu.set_pulse_config(width=self.pulse_width))
         # Configuring pulses
         if apply_voltage == 0:
             smu1_list, smu2_list = [read_voltage], [0]
@@ -557,15 +561,20 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                               trigger_count = len(pulse_sequence),
                               pulse_width = pulse_width)
         # Triggers and source shapes
-        for smu in [self.A.SMU1, self.A.SMU2, self.gate_smu, self.temp_smu]:
-            self.resps.append(smu.set_measurement_aperture(aperture=0.4*pulse_width))
+        for smu in [self.A.SMU1, self.A.SMU2, self.gate_smu]:
+            self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.pulse_width))
+        self.resps += self.temp_smu.write(':sense1:voltage:aperture:auto off')
+        self.resps += self.temp_smu.write(f':sense1:voltage:aperture {0.4*self.pulse_width}')
         for smu in [self.A.SMU1, self.A.SMU2]:
-            self.resps.append(smu.set_trigger_BUS(self.trigger_count, acquire_delay=0.3*pulse_width))
+            self.resps.append(smu.set_trigger_BUS(self.trigger_count, acquire_delay=0.3*self.pulse_width))
             self.resps.append(smu.set_source_shape('pulse'))
-            self.resps.append(smu.set_pulse_config(width=pulse_width))
+            self.resps.append(smu.set_pulse_config(width=self.pulse_width))
         for smu in [self.gate_smu, self.temp_smu]:
             self.resps.append(smu.set_source_shape('DC'))
-            self.resps.append(smu.set_trigger_external(pin=2, count=self.trigger_count, acquire_delay=0.3*pulse_width))
+            # self.resps.append(smu.set_source_shape('pulse'))
+            # self.resps.append(smu.set_pulse_config(width=self.pulse_width))
+            self.resps.append(smu.set_trigger_external(pin=2, count=self.trigger_count, acquire_delay=0.3*self.pulse_width))
+            self.resps.append(smu.set_arm_BUS())
         # Voltage config
         self.read_side = 1  # Read on reset
         smu1_seq, smu2_seq = [], []
@@ -584,7 +593,9 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         self.resps.append(self.A.SMU2.set_list_voltage(smu2_seq, current_compliance=current_compliance))
         self.resps.append(self.gate_smu.set_constant_voltage(voltage=GATE_VOLTAGE, current_compliance=1e-6))
         self.resps.append(self.gate_smu.set_base_voltage_immediate(voltage=GATE_VOLTAGE, current_compliance=1e-6))
-        return self._check_config_and_start('SMU_std')
+        flag, resp = self._check_config_and_start('SMU_std')
+        self.B.arm()
+        return flag, resp
     
     
     def config_pulsed_retention(
@@ -616,14 +627,15 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         # Configuring triggers and source shapes
         for smu in [self.A.SMU1, self.A.SMU2, self.gate_smu, self.temp_smu]:
             self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
-                                               acquire_delay=0.3*pulse_width))
-            self.resps.append(smu.set_measurement_aperture(aperture=0.4*pulse_width))
+                                               acquire_delay=0.3*self.pulse_width))
+            self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.pulse_width))
         for smu in [self.gate_smu, self.temp_smu]:
             self.resps.append(smu.set_source_shape('DC'))
+            self.resps.append(smu.set_arm_external(pin=1))  # todo: Вынести номер пина в файл конфигурации
         # Pulse mode for BL and NL
         for smu in [self.A.SMU1, self.A.SMU2]:
             self.resps.append(smu.set_source_shape('pulse'))
-            self.resps.append(smu.set_pulse_config(width=pulse_width))
+            self.resps.append(smu.set_pulse_config(width=self.pulse_width))
         if sign:
             read_smu = self.A.SMU1
             zero_smu = self.A.SMU2

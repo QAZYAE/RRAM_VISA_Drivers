@@ -64,6 +64,16 @@ def _K_t2v_neg(temp: float) -> float:
     order = len(T2V_negative) - 1
     return sum([T2V_negative[i]*temp**(order-i) for i in range(len(T2V_negative))])
 
+def _K_v2t(volt: float, room_temp: float) -> float:
+    if volt < 0: 
+        return _K_v2t_neg(volt) + room_temp
+    return _K_v2t_pos(volt) + room_temp
+
+def _K_t2v(temp: float, room_temp: float) -> float:
+    if (temp - room_temp) < 0: 
+        return _K_t2v_neg(temp - room_temp)
+    return _K_t2v_pos(temp - room_temp)
+
 
 def K_volt2temp(volt: Union[float, ArrayLike], room_temp: float = 22) -> Union[float, ArrayLike]:
     """Convert K-type thermocouple voltage to temperature. 
@@ -77,10 +87,13 @@ def K_volt2temp(volt: Union[float, ArrayLike], room_temp: float = 22) -> Union[f
     Returns:
         temperature (Union[float, ArrayLike]): Thermocouple temperature (Celsius).
     """
-    if volt < 0: 
-        return _K_v2t_neg(volt) + room_temp
-    else:
-        return _K_v2t_pos(volt) + room_temp
+    if isinstance(volt, ArrayLike):
+        res = []
+        for v in volt:
+            res.append(_K_v2t(v, room_temp))
+        return np.array(res)
+    return _K_v2t(volt, room_temp)
+
 
 
 def K_temp2volt(temp: Union[float, ArrayLike], room_temp: float = 22) -> Union[float, ArrayLike]:
@@ -95,7 +108,9 @@ def K_temp2volt(temp: Union[float, ArrayLike], room_temp: float = 22) -> Union[f
     Returns:
         voltage (Union[float, ArrayLike]): Thermocouple voltage (Volts).
     """
-    if (temp - room_temp) < 0: 
-        return _K_t2v_neg(temp - room_temp)
-    else:
-        return _K_t2v_pos(temp - room_temp)
+    if isinstance(temp, ArrayLike):
+        res = []
+        for t in temp:
+            res.append(_K_t2v(t, room_temp))
+        return np.array(res)
+    return _K_t2v(temp, room_temp)

@@ -35,6 +35,7 @@ class SMU(VISA_module):
             raise RuntimeError('ERROR: wrong channel number. Allowed channel numbers are 1 through 8.')
         self.ch = channel
         self.inst_name = instrument_name
+        self.smu_mode = 'voltage'
         super().__init__(resource, module_name=f'{self.inst_name}, channel {self.ch}')
         
         
@@ -86,6 +87,7 @@ class SMU(VISA_module):
         """
         if mode.lower() not in ['voltage', 'current']:
             return f'ERROR: {self.resp} Invalid SMU mode. Valid values: voltage|current (str).'
+        self.smu_mode = mode
         return self.write_resp(f'source{self.ch}:function:mode {mode}',
                                f'Output mode is set to {mode}')
     
@@ -237,12 +239,13 @@ class SMU(VISA_module):
         Returns:
             response (str): Command response | error if an error occured.
         """
+        meas_type = 'current' if self.smu_mode == 'voltage' else 'voltage'
         if auto:
-            return self.write_resp(f'sense{self.ch}:current:aperture:auto on',
+            return self.write_resp(f'sense{self.ch}:{meas_type}:aperture:auto on',
                                    'Integration time is set to AUTO.')
         return self.write_resp(
-            ';:'.join([f'sense{self.ch}:current:aperture:auto off',
-                       f'sense{self.ch}:current:aperture {aperture}']),    
+            ';:'.join([f'sense{self.ch}:{meas_type}:aperture:auto off',
+                       f'sense{self.ch}:{meas_type}:aperture {aperture}']),    
             f'Integration time is set to {aperture} s.'
         )
         
@@ -256,6 +259,7 @@ class SMU(VISA_module):
         Returns:
             response (str): Command response | error if an error occured.
         """
+        self.smu_mode = 'current'
         return self.write_resp(
             ';:'.join([f'source{self.ch}:function:mode current',
                        f'source{self.ch}:current:mode fix',

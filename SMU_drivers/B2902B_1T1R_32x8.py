@@ -383,7 +383,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         self.resps.append(self.B.wait_for_idle(wait_interval=0.1*self.trigger_interval))
         
         
-    def _check_config_and_start(self, mode_name: str) -> tuple[bool, str]:
+    def _check_config_and_start(self, mode_name: str, arm_B: bool = False) -> tuple[bool, str]:
         """Check if the instrument was configured without errors"""
         response = ''
         bad_config_flag = False
@@ -404,6 +404,8 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         self.A.initiate()
         self.B.initiate()
         self.A.arm()
+        if arm_B:
+            self.B.arm()
         self.exp_start_time = time.time()
         return True, f'{mode_name} was configured'
         
@@ -561,18 +563,14 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                               trigger_count = len(pulse_sequence),
                               pulse_width = pulse_width)
         # Triggers and source shapes
-        for smu in [self.A.SMU1, self.A.SMU2, self.gate_smu]:
+        for smu in [self.A.SMU1, self.A.SMU2, self.gate_smu, self.temp_smu]:
             self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.pulse_width))
-        self.resps += self.temp_smu.write(':sense1:voltage:aperture:auto off')
-        self.resps += self.temp_smu.write(f':sense1:voltage:aperture {0.4*self.pulse_width}')
         for smu in [self.A.SMU1, self.A.SMU2]:
             self.resps.append(smu.set_trigger_BUS(self.trigger_count, acquire_delay=0.3*self.pulse_width))
             self.resps.append(smu.set_source_shape('pulse'))
             self.resps.append(smu.set_pulse_config(width=self.pulse_width))
         for smu in [self.gate_smu, self.temp_smu]:
             self.resps.append(smu.set_source_shape('DC'))
-            # self.resps.append(smu.set_source_shape('pulse'))
-            # self.resps.append(smu.set_pulse_config(width=self.pulse_width))
             self.resps.append(smu.set_trigger_external(pin=2, count=self.trigger_count, acquire_delay=0.3*self.pulse_width))
             self.resps.append(smu.set_arm_BUS())
         # Voltage config

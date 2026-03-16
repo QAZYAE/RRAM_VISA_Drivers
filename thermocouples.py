@@ -1,7 +1,7 @@
 """Функции для температурных измерений"""
 from typing import Union
 import numpy as np
-from numpy.typing import  ArrayLike
+from collections.abc import Iterable
 
 
 
@@ -75,19 +75,19 @@ def _K_t2v(temp: float, room_temp: float) -> float:
     return _K_t2v_pos(temp - room_temp)
 
 
-def K_volt2temp(volt: Union[float, ArrayLike], room_temp: float = 22) -> Union[float, ArrayLike]:
+def K_volt2temp(volt: Union[float, Iterable], room_temp: float = 22) -> Union[float, Iterable]:
     """Convert K-type thermocouple voltage to temperature. 
     **!Approximation of the calibration table was performed 
     in the range from -270 to 200 Celsius!**
 
     Args:
-        volt (Union[float, ArrayLike]): Thermocouple voltage (Volts).
+        volt (Union[float, Iterable]): Thermocouple voltage (Volts).
         room_temp (float, optional): Room temperature. Defaults to 22 Celsius.
 
     Returns:
-        temperature (Union[float, ArrayLike]): Thermocouple temperature (Celsius).
+        temperature (Union[float, Iterable]): Thermocouple temperature (Celsius).
     """
-    if isinstance(volt, ArrayLike):
+    if isinstance(volt, Iterable):
         res = []
         for v in volt:
             res.append(_K_v2t(v, room_temp))
@@ -96,19 +96,19 @@ def K_volt2temp(volt: Union[float, ArrayLike], room_temp: float = 22) -> Union[f
 
 
 
-def K_temp2volt(temp: Union[float, ArrayLike], room_temp: float = 22) -> Union[float, ArrayLike]:
+def K_temp2volt(temp: Union[float, Iterable], room_temp: float = 22) -> Union[float, Iterable]:
     """Convert K-type thermocouple temperature to voltage. 
-    **!Linear approximation of the calibration table was performed 
+    **!Approximation of the calibration table was performed 
     in the range from -270 to 200 Celsius!**
 
     Args:
-        temp (Union[float, ArrayLike]): Thermocouple temperature (Celsius).
+        temp (Union[float, Iterable]): Thermocouple temperature (Celsius).
         room_temp (float, optional): Room temperature. Defaults to 22 Celsius.
 
     Returns:
-        voltage (Union[float, ArrayLike]): Thermocouple voltage (Volts).
+        voltage (Union[float, Iterable]): Thermocouple voltage (Volts).
     """
-    if isinstance(temp, ArrayLike):
+    if isinstance(temp, Iterable):
         res = []
         for t in temp:
             res.append(_K_t2v(t, room_temp))

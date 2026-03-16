@@ -102,7 +102,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             err = inst.get_errors()
             if err is not None:
                 self.logger.error('B2902B 1T1R 32x8 driver init error!')
-                self.logger.error(f'Instrument {name}:\n\t{"\n\t".join(err)}')
+                self.logger.error(f'Instrument {name}:\n\t' + '\n\t'.join(err))
                 raise ConnectionError(f'Error in {name} error queue: {err}')
         # Beeping
         self.A.beep(frequency=1000, time=0.2)
@@ -233,7 +233,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             resps.append(self.B.set_output_state('on'))
             self.logger.info('Panic resolved!')
         else:
-            self.logger.error(f'Panic was not resolved!\n\t{"\n\t".join(resps)}')
+            self.logger.error('Panic was not resolved!\n\t' + '\n\t'.join(resps))
         return flag, '\n'.join(resps)
     
     
@@ -333,7 +333,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                 # sense_gate = sense2_B
                 sense_temp = sense1_B
             V_temp = sense_temp[0:len(R)*2:2]
-            Temp = K_volt2temp(V_temp)
+            Temp = K_volt2temp(V_temp, room_temp=float(self.settings['ITC_1T1R']['room_temperature']))
             self.logger.debug(f'Sense_data acquired: V = {V}, curr = {Curr}, R = {R}, Time={timestamp}, V_temp={V_temp}, Temp={Temp}')
             for r, t, v, cur, tem, v_t in zip(R, timestamp, V, Curr, Temp, V_temp):
                 self.queue.append((r, t, v, cur, tem, v_t))

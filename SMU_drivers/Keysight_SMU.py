@@ -17,10 +17,11 @@ class SMU(VISA_module):
         inst_name (str): Instrument name for responses.
     """
     def __init__(
-        self, 
+        self,
         resource: Union[pyvisa.Resource, None], 
         channel: int, 
         instrument_name: str = 'Instrument',
+        parent = None
     ) -> None:
         """Handles communicating with an SMU (Source-Measure Unit) on a Keysight instrument.
 
@@ -30,7 +31,9 @@ class SMU(VISA_module):
                 If resource is None, the program simulates communication.
             channel (int): Channel number on the instrumetn mainframe.
             instrument_name (str, optional): Instrument name for responses. Defaults to 'Instrument'.
+            parent (B2902B): Parent instrument class.
         """
+        self.parent = parent
         if channel < 1 or channel > 8:
             raise RuntimeError('ERROR: wrong channel number. Allowed channel numbers are 1 through 8.')
         self.ch = channel
@@ -509,31 +512,73 @@ class SMU(VISA_module):
         )
         
         
-    def initiate(self) -> str:
-        """Initiate SMU (Moves from IDLE layer to ARM layer)
+    def initiate(
+        self,
+        check_status: bool = True, 
+        attempts: int = 500, 
+        wait_interval: float = 0.001
+    ) -> str:
+        """Initiate SMU (Moves from IDLE layer to ARM layer).
+            WARNING: you need to use parent class initiate if you want to initiate multiple SMUs.
+        
+        Args:
+            check_status (bool, optional): If True, checks if the instrument is in the correct state 
+                before initiating.
+            attempts (int, optional): Number of attempts to communicate with the instrument. Defaults to 500.
+            wait_interval (float, optional): Time to wait between attempts (seconds).Defaults to 1 ms.
 
         Returns:
             response (str): Command response | error if an error occured.        
         """
-        return self.write_resp(f'init (@{self.ch})', 'SMU initiated')
+        if self.parent is None:
+            return self.write_resp(f'init (@{self.ch})', 'SMU initiated')
+        return self.parent.initiate(self.ch, check_status, attempts, wait_interval)
     
     
-    def arm(self) -> str:
-        """Send an immediate ARM trigger over BUS
+    def arm(
+        self,
+        check_status: bool = True, 
+        attempts: int = 500, 
+        wait_interval: float = 0.001
+    ) -> str:
+        """Send an immediate ARM trigger over BUS.
+            WARNING: you need to use parent class ARM if you want to initiate multiple SMUs.
+            
+        Args:
+            check_status (bool, optional): If True, checks if the instrument is in the correct state 
+                before initiating.
+            attempts (int, optional): Number of attempts to communicate with the instrument. Defaults to 500.
+            wait_interval (float, optional): Time to wait between attempts (seconds).Defaults to 1 ms.
 
         Returns:
             response (str): Command response | error if an error occured.        
         """
-        return self.write_resp(f'arm (@{self.ch})', 'ARM trigger was sent')
+        if self.parent is None:
+            return self.write_resp(f'arm (@{self.ch})', 'ARM trigger was sent')
+        return self.parent.arm(self.ch, check_status, attempts, wait_interval)
     
     
-    def trigger(self) -> str:
-        """Send an immediate TRIGGER trigger over BUS
+    def trigger(
+        self,
+        check_status: bool = True, 
+        attempts: int = 500, 
+        wait_interval: float = 0.001
+    ) -> str:
+        """Send an immediate TRIGGER trigger over BUS.
+            WARNING: you need to use parent class ARM if you want to initiate multiple SMUs.
+            
+        Args:
+            check_status (bool, optional): If True, checks if the instrument is in the correct state 
+                before initiating.
+            attempts (int, optional): Number of attempts to communicate with the instrument. Defaults to 500.
+            wait_interval (float, optional): Time to wait between attempts (seconds).Defaults to 1 ms.
 
         Returns:
             response (str): Command response | error if an error occured.        
         """
-        return self.write_resp(f'trigger (@{self.ch})', 'TRIGGER trigger was sent')
+        if self.parent is None:
+            return self.write_resp(f'trigger (@{self.ch})', 'TRIGGER trigger was sent')
+        return self.parent.trigger(self.ch, check_status, attempts, wait_interval)
     
     
     def get_measurement_config(self) -> dict:

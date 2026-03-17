@@ -255,7 +255,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         return np.array(sense1), np.array(sense2)
         
         
-    def sense(self, acquire_attempts: int = 50, trigger: bool = False) -> Union[tuple[float, float], str]:
+    def sense(self, acquire_attempts: int = 500, trigger: bool = False) -> Union[tuple[float, float], str]:
         """Read sense data from the instruments. Returns resistance array with resistances
         which haven't been read yet.
         
@@ -280,12 +280,19 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             else:
                 # Trigger
                 if trigger:
-                    self.logger.debug(f'SENSE TRIGGER INSTRUMENT STATUS: A: {self.A.query('status:operation:condition?')}, B: {self.B.query('status:operation:condition?')}')
-                    self.A.trigger()
-                    self.logger.debug('Sense: Trigger sent to instrument A')
+                    self.logger.debug(f'SENSE TRIGGER INSTRUMENT STATUS: A: {self.A.check_trigger_status()}, B: {self.B.check_trigger_status()}')
+                    flag, resp = self.B.check_armed()  # Check if B is ready for trigger
+                    if not flag:
+                        self.logger.error(f'.sense(): B is not armed! B status: {resp}')
+                        raise RuntimeError(f'.sense(): B is not armed! B status: {resp}')
+                    resp = self.A.trigger()  # Trigger A
+                    if resp.startswith('ERROR'):
+                        self.logger.error(f'.sense(): A trigger error: {resp}')
+                        raise RuntimeError(f'.sense(): A trigger error: {resp}')
+                    else:
+                        self.logger.debug('Sense: Trigger sent to instrument A')
                 # ACQUIRE A
                 for i in range(acquire_attempts):
-                    # self.logger.info(self.A.get_sense_data())
                     sense_data_A = self.A.get_sense_data(offset=self.acquired_counter)  # sense_ch1, sense_ch2
                     self.logger.debug(f'Sense_A: acquire attempt {i}: {sense_data_A}')
                     if sense_data_A is not None:
@@ -293,13 +300,12 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                     time.sleep(sleep_time)
                 if sense_data_A is None:
                     self.logger.error('Cant obtain sense_A data!')
-                    return 'Cant obtain sense_A data!'
+                    raise RuntimeError('Cant obtain sense_A data!')
                 if isinstance(sense_data_A, str):
                     self.logger.error(f'Sense_A acquire error: {sense_data_A}')
-                    return sense_data_A
+                    raise RuntimeError(sense_data_A)
                 # ACQUIRE B
                 for i in range(acquire_attempts):
-                    # self.logger.info(self.B.get_sense_data())
                     sense_data_B = self.B.get_sense_data(offset=self.acquired_counter)  # sense_ch1, sense_ch2
                     self.logger.debug(f'Sense_B: acquire attempt {i}: {sense_data_B}')
                     if (sense_data_B is not None and
@@ -309,10 +315,10 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                     time.sleep(sleep_time)
                 if sense_data_B is None:
                     self.logger.error('Cant obtain sense_B data!')
-                    return 'Cant obtain sense_B data!'
+                    raise RuntimeError('Cant obtain sense_B data!')
                 if isinstance(sense_data_B, str):
                     self.logger.error(f'Sense_B acquire error: {sense_data_B}')
-                    return sense_data_B
+                    raise RuntimeError(sense_data_B)
                 self.logger.debug('Sense_A and sense_B acquired')
                 sense1, sense2 = sense_data_A
                 sense1_B, sense2_B = sense_data_B
@@ -351,15 +357,24 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         except IndexError:
             self.logger.error('Sense queue is empty!')
             return 'Sense queue is empty!'
+        except RuntimeError as e:
+            self.logger.error(f'Sense terminated: {e}')
+            return f'Sense terminated: {e}'
         
         
     def trigger(self) -> None:
         """Send immediate trigger, skip one acquire value"""
-        self.logger.debug(f'SENSE TRIGGER INSTRUMENT STATUS: A: {self.A.query('status:operation:condition?')}; B: {self.B.query('status:operation:condition?')}')
-        self.A.trigger()
+        self.logger.debug(f'.tigger() TRIGGER INSTRUMENT STATUS: A: {self.A.check_trigger_status()}, B: {self.B.check_trigger_status()}')
+        flag, resp = self.B.check_armed()  # Check if B is ready for trigger
+        if not flag:
+            self.logger.error(f'.trigger(): B is not armed! B status: {resp}')
+            raise f'.trigger(): B is not armed! B status: {resp}'
+        resp = self.A.trigger()  # Trigger A
+        if resp.startswith('ERROR'):
+            self.logger.error(f'.sense(): A trigger error: {resp}')
+            return f'.sense(): A trigger error: {resp}'
         self.logger.debug('.trigger(): trigger sent to instrument A')
         self.acquired_counter += 1
-        # time.sleep(0.01)
         
         
     def _set_init_values(self, mode, trigger_count, trigger_interval = None, pulse_width = None) -> None:
@@ -599,8 +614,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         self.resps.append(self.A.SMU2.set_list_voltage(smu2_seq, current_compliance=current_compliance))
         self.resps.append(self.gate_smu.set_constant_voltage(voltage=GATE_VOLTAGE, current_compliance=1e-6))
         self.resps.append(self.gate_smu.set_base_voltage_immediate(voltage=GATE_VOLTAGE, current_compliance=1e-6))
-        flag, resp = self._check_config_and_start('SMU_std')
-        self.B.arm()
+        flag, resp = self._check_config_and_start('SMU_std', arm_B=True)
         return flag, resp
     
     

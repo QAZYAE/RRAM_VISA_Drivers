@@ -35,8 +35,8 @@ class B2902B(VISA_instrument):
         """
         IDN_response = 'Keysight Technologies,B2902B'
         super().__init__(resource, IDN_response=IDN_response, instrument_name=instrument_name)
-        self.SMU1 = SMU(resource, channel=1, instrument_name=instrument_name)
-        self.SMU2 = SMU(resource, channel=2, instrument_name=instrument_name)
+        self.SMU1 = SMU(resource, channel=1, instrument_name=instrument_name, parent=self)
+        self.SMU2 = SMU(resource, channel=2, instrument_name=instrument_name, parent=self)
         
         
     def set_output_state(self, state: str) -> str:
@@ -182,31 +182,241 @@ class B2902B(VISA_instrument):
         return f'ERROR: {self.resp}\n\tWait for IDLE unsuccessfull: {response}'
     
     
-    def initiate(self) -> str:
+    def get_raw_trigger_status(self) -> str:
+        """Check trigger status (operation condition).
+
+        Returns:
+            (flag, response) (tuple[bool, str]): Flag is True if the query was 
+                successfull, response is error or operation condition. The 
+                condition is the sum of the binary values for the set bits.
+        """
+        if self.sim:
+            return True, '32767'  # All status entries are true
+        return self.query_resp('status:operation:condition?')
+    
+    
+    def check_trigger_status(self) -> list[str]:
+        """Get the trigger status as a list with descriptions.
+
+        Returns:
+            descriptions (list[str]): List describing status which may contain
+                following items:
+                'Calibration/Self-test Running'
+                'Ch1 Transition Idle'
+                'Ch1 Waiting for Transition Trigger'
+                'Ch1 Waiting for Transition Arm'
+                'Ch1 Acquire Idle'
+                'Ch1 Waiting for Acquire Trigger'
+                'Ch1 Waiting for Acquire Arm'
+                'Ch2 Transition Idle'
+                'Ch2 Waiting for Transition Trigger'
+                'Ch2 Waiting for Transition Arm'
+                'Ch2 Acquire Idle'
+                'Ch2 Waiting for Acquire Trigger'
+                'Ch2 Waiting for Acquire Arm'
+                'Instrument Locked'
+                'Program Running'
+        """
+        flag, response = self.get_raw_trigger_status()
+        if not flag:
+            return response
+        try:
+            descriptions = [
+                'Calibration/Self-test Running',
+                'Ch1 Transition Idle',
+                'Ch1 Waiting for Transition Trigger',
+                'Ch1 Waiting for Transition Arm',
+                'Ch1 Acquire Idle',
+                'Ch1 Waiting for Acquire Trigger',
+                'Ch1 Waiting for Acquire Arm',
+                'Ch2 Transition Idle',
+                'Ch2 Waiting for Transition Trigger',
+                'Ch2 Waiting for Transition Arm',
+                'Ch2 Acquire Idle',
+                'Ch2 Waiting for Acquire Trigger',
+                'Ch2 Waiting for Acquire Arm',
+                'Instrument Locked',
+                'Program Running'
+            ]
+            result = []
+            for i, desk in zip(bin(int(response))[2:].zfill(15), descriptions[::-1]):
+                if i == '1':
+                    result.append(desk)
+            return result
+        except Exception as e:
+            return f'ERROR: {self.resp}\n\t.check_trigger_status(): Could not interpret "{response}" as a status! Error: {e}'
+        
+        
+    def _check_tran_acq(
+        self, 
+        channel: str, 
+        tran_str: str, 
+        acq_str:str, 
+        attempts: int = 500, 
+        wait_interval: float = 0.001
+    ) -> tuple[bool, str]:
+        """Check instrument status for transient and acquire levels"""
+        success = True
+        for _ in range(attempts):
+            status_list = self.check_trigger_status()
+            if isinstance(status_list, str):
+                return False, f'ERROR: {self.resp}: _check_tran_acq(): {status_list}'
+            for chan in str(channel).split(','):  # Checking if channel's status is right
+                success = success and f'Ch{chan} {tran_str}'
+                success = success and f'Ch{chan} {acq_str}'
+            if success: 
+                break
+            time.sleep(wait_interval)
+        return success, '\n'.join(status_list)
+    
+    
+    def check_idle(self, channel: str = '1,2', attempts: int = 500, wait_interval: float = 0.001) -> tuple[bool, str]:
+        """Check if instrument is in idle state (via operation status command).
+
+        Args:
+            channel: (str, optional): channel to initiate (1 or 2). Defaults to '1,2' (initiates both channels).
+            attempts (int, optional): Number of attempts to communicate with the instrument. Defaults to 500.
+            wait_interval (float, optional): Time to wait between attempts (seconds).Defaults to 1 ms.
+
+        Returns:
+            (flag, response) (tuple[bool, str]): idle_flag, status_list.
+        """
+        return self._check_tran_acq(channel, tran_str='Transition Idle', acq_str='Acquire Idle', 
+                                    attempts=attempts, wait_interval=wait_interval)
+        
+        
+    def check_initiated(self, channel: str = '1,2', attempts: int = 500, wait_interval: float = 0.001) -> tuple[bool, str]:
+        """Check if instrument is in initiated (waiting for ARM trigger).
+
+        Args:
+            channel: (str, optional): channel to initiate (1 or 2). Defaults to '1,2' (initiates both channels).
+            attempts (int, optional): Number of attempts to communicate with the instrument. Defaults to 500.
+            wait_interval (float, optional): Time to wait between attempts (seconds).Defaults to 1 ms.
+
+        Returns:
+            (flag, response) (tuple[bool, str]): idle_flag, status_list.
+        """
+        return self._check_tran_acq(channel, tran_str='Waiting for Transition Arm', acq_str='Waiting for Acquire Arm', 
+                                    attempts=attempts, wait_interval=wait_interval)
+        
+        
+    def check_armed(self, channel: str = '1,2', attempts: int = 500, wait_interval: float = 0.001) -> tuple[bool, str]:
+        """Check if instrument is in initiated (waiting for ARM trigger).
+
+        Args:
+            channel: (str optional): channel to initiate (1 or 2). Defaults to '1,2' (initiates both channels).
+            attempts (int, optional): Number of attempts to communicate with the instrument. Defaults to 500.
+            wait_interval (float, optional): Time to wait between attempts (seconds).Defaults to 1 ms.
+
+        Returns:
+            (flag, response) (tuple[bool, str]): idle_flag, status_list.
+        """
+        return self._check_tran_acq(channel, tran_str='Waiting for Transition Trigger', acq_str='Waiting for Acquire Trigger', 
+                                    attempts=attempts, wait_interval=wait_interval)
+        
+        
+    def _move_layer(
+        self, 
+        command: str,
+        channel: str = '1,2', 
+        check_status: bool = True, 
+        attempts: int = 500, 
+        wait_interval: float = 0.001
+    ) -> str:
+        """Method for implementing .initiate(), .arm() and .trigger() with instrument state confirmation."""
+        if command == 'init':
+            meth = '.initiate()'
+            check_func = self.check_idle
+            descript = 'initiate'
+        elif command == 'arm':
+            meth = '.arm()'
+            check_func = self.check_initiated
+            descript = 'ARM trigger'
+        elif command == 'trigger':
+            meth = '.trigger()'
+            check_func = self.check_armed
+            descript = 'TRIGGER trigger'
+        else:
+            return f'ERROR: syntax in B2902B._move_layer(): unknown command {command}'
+        # Channel checking
+        if channel not in [1, 2, '1', '2', '1,2']:
+            return f'ERROR: {self.resp} {meth}: wrong channgel number: "{channel}"'
+        else:
+            ch = channel
+        # Instrument status checking
+        if check_status:
+            success, status_list = check_func(channel, attempts, wait_interval)
+        else:
+            success = True
+        if success:
+            return self.write_resp(f'{command} (@{ch})', f'Channel(s) {ch}: {descript} was sent')
+        return f'ERROR: {self.resp}: Could not send {descript} to the instrument in {attempts} attempts! Last status list: {status_list}'
+    
+    
+    def initiate(
+        self, 
+        channel: str = '1,2', 
+        check_status: bool = True, 
+        attempts: int = 500, 
+        wait_interval: float = 0.001
+    ) -> str:
         """Initiate both channels (Moves from IDLE layer to ARM layer).
+        
+        Args:
+            channel: (str, optional): channel to initiate (1 or 2). Defaults to '1,2' (initiates both channels).
+            check_status (bool, optional): If True, checks if the instrument is in the correct state 
+                before initiating.
+            attempts (int, optional): Number of attempts to communicate with the instrument. Defaults to 500.
+            wait_interval (float, optional): Time to wait between attempts (seconds).Defaults to 1 ms.
 
         Returns:
             response (str): Command response | error if an error occured.        
         """
-        return self.write_resp('init (@1,2)', 'Instrument initiated')
+        return self._move_layer('init', channel, check_status, attempts, wait_interval)
     
     
-    def arm(self) -> str:
+    def arm(
+        self, 
+        channel: str = '1,2', 
+        check_status: bool = True, 
+        attempts: int = 500, 
+        wait_interval: float = 0.001
+    ) -> str:
         """Send an immediate ARM trigger over BUS (both channels).
+        
+        Args:
+            channel: (str, optional): channel to send arm trigger (1 or 2). Defaults to '1,2' (arms both channels).
+            check_status (bool, optional): If True, checks if the instrument is in the correct state 
+                before sending the trigger.
+            attempts (int, optional): Number of attempts to communicate with the instrument. Defaults to 500.
+            wait_interval (float, optional): Time to wait between attempts (seconds). Defaults to 1 ms.
 
         Returns:
             response (str): Command response | error if an error occured.        
         """
-        return self.write_resp('arm (@1,2)', 'ARM trigger was sent')
+        return self._move_layer('arm', channel, check_status, attempts, wait_interval)
     
     
-    def trigger(self) -> str:
+    def trigger(
+        self, 
+        channel: str = '1,2', 
+        check_status: bool = True, 
+        attempts: int = 500, 
+        wait_interval: float = 0.001
+    ) -> str:
         """Send an immediate TRIGGER trigger over BUS (both channels).
+        
+        Args:
+            channel: (str, optional): channel to send arm trigger (1 or 2). Defaults to '1,2' (arms both channels).
+            check_status (bool, optional): If True, checks if the instrument is in the correct state 
+                before sending the trigger.
+            attempts (int, optional): Number of attempts to communicate with the instrument. Defaults to 500.
+            wait_interval (float, optional): Time to wait between attempts (seconds). Defaults to 1 ms.
 
         Returns:
             response (str): Command response | error if an error occured.        
         """
-        return self.write_resp('trigger (@1,2)', 'TRIGGER trigger was sent')
+        return self._move_layer('trigger', channel, check_status, attempts, wait_interval)
     
     
     def get_sense_data(self, offset: int = 0) -> Union[tuple[np.ndarray], str, None]:

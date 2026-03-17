@@ -272,6 +272,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             sleep_time = 1e-3
         else:
             sleep_time = 0.1 * self.trigger_interval
+        self.logger.debug(f'ACQUIRED_COUNTER (BEFORE): {self.acquired_counter}, (trigger_count: {self.trigger_count})')
         if self.acquired_counter != self.trigger_count:  # Skip acquire if queue is full
             if self.sim:
                 sense1, sense2 = self._random_sense()
@@ -280,7 +281,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                 # Trigger
                 if trigger:
                     self.A.trigger()
-                    self.logger.debug('Sense: Trigger sent')
+                    self.logger.debug('Sense: Trigger sent to instrument A')
                 # ACQUIRE A
                 for i in range(acquire_attempts):
                     self.logger.info(self.A.get_sense_data())
@@ -289,6 +290,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                     if sense_data_A is not None:
                         break
                     time.sleep(sleep_time)
+                    self.logger.debug(f'A: OPERATION COND: {self.A.query('status:operation:condition?')}')
                 if sense_data_A is None:
                     self.logger.error('Cant obtain sense_A data!')
                     return 'Cant obtain sense_A data!'
@@ -305,6 +307,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                         len(sense_data_A[1])/3*2 <= len(sense_data_B[1])):
                         break
                     time.sleep(sleep_time)
+                    self.logger.debug(f'B: OPERATION COND: {self.B.query('status:operation:condition?')}')
                 if sense_data_B is None:
                     self.logger.error('Cant obtain sense_B data!')
                     return 'Cant obtain sense_B data!'
@@ -314,6 +317,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                 self.logger.debug('Sense_A and sense_B acquired')
                 sense1, sense2 = sense_data_A
                 sense1_B, sense2_B = sense_data_B
+                self.logger.debug(f'LENGTHS: sense1_A: {len(sense1)}, sense2_A: {len(sense2)}, sense1_B: {len(sense1_B)}, sense2_B: {len(sense2_B)}')
                 # TODO Save WL data
             # PARSING DATA
             # B data might be longer than A data
@@ -339,6 +343,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                 self.queue.append((r, t, v, cur, tem, v_t))
             self.acquired_counter += len(R)
         try:
+            self.logger.debug(f'ACQUIRED COUNTER (AFT): {self.acquired_counter}')
             data_to_send = self.queue.pop(0)
             self.logger.info(f'Data returned: {data_to_send}')
             self.logger.warning(f'Temperature: {data_to_send[4]} C')

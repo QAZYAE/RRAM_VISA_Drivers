@@ -280,17 +280,17 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             else:
                 # Trigger
                 if trigger:
+                    self.logger.debug(f'SENSE TRIGGER INSTRUMENT STATUS: A: {self.A.query('status:operation:condition?')}, B: {self.B.query('status:operation:condition?')}')
                     self.A.trigger()
                     self.logger.debug('Sense: Trigger sent to instrument A')
                 # ACQUIRE A
                 for i in range(acquire_attempts):
-                    self.logger.info(self.A.get_sense_data())
+                    # self.logger.info(self.A.get_sense_data())
                     sense_data_A = self.A.get_sense_data(offset=self.acquired_counter)  # sense_ch1, sense_ch2
                     self.logger.debug(f'Sense_A: acquire attempt {i}: {sense_data_A}')
                     if sense_data_A is not None:
                         break
                     time.sleep(sleep_time)
-                    self.logger.debug(f'A: OPERATION COND: {self.A.query('status:operation:condition?')}')
                 if sense_data_A is None:
                     self.logger.error('Cant obtain sense_A data!')
                     return 'Cant obtain sense_A data!'
@@ -299,7 +299,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                     return sense_data_A
                 # ACQUIRE B
                 for i in range(acquire_attempts):
-                    self.logger.info(self.B.get_sense_data())
+                    # self.logger.info(self.B.get_sense_data())
                     sense_data_B = self.B.get_sense_data(offset=self.acquired_counter)  # sense_ch1, sense_ch2
                     self.logger.debug(f'Sense_B: acquire attempt {i}: {sense_data_B}')
                     if (sense_data_B is not None and
@@ -307,7 +307,6 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                         len(sense_data_A[1])/3*2 <= len(sense_data_B[1])):
                         break
                     time.sleep(sleep_time)
-                    self.logger.debug(f'B: OPERATION COND: {self.B.query('status:operation:condition?')}')
                 if sense_data_B is None:
                     self.logger.error('Cant obtain sense_B data!')
                     return 'Cant obtain sense_B data!'
@@ -356,8 +355,11 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         
     def trigger(self) -> None:
         """Send immediate trigger, skip one acquire value"""
+        self.logger.debug(f'SENSE TRIGGER INSTRUMENT STATUS: A: {self.A.query('status:operation:condition?')}; B: {self.B.query('status:operation:condition?')}')
         self.A.trigger()
+        self.logger.debug('.trigger(): trigger sent to instrument A')
         self.acquired_counter += 1
+        # time.sleep(0.01)
         
         
     def _set_init_values(self, mode, trigger_count, trigger_interval = None, pulse_width = None) -> None:

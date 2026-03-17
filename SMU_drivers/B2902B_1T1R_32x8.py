@@ -410,6 +410,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         # Start the experiment
         self.A.initiate()
         self.B.initiate()
+        self.logger.debug(f'CONFIG ARM INSTRUMENT STATUS: A: {self.A.query('status:operation:condition?')}, B: {self.B.query('status:operation:condition?')}')
         self.A.arm()
         if arm_B:
             self.B.arm()

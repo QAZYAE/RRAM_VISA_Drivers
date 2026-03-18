@@ -423,12 +423,25 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             return False, response
         self.logger.info(f'{mode_name} config success!')
         # Start the experiment
-        self.A.initiate()
-        self.B.initiate()
-        self.logger.debug(f'CONFIG ARM INSTRUMENT STATUS: A: {self.A.query('status:operation:condition?')}, B: {self.B.query('status:operation:condition?')}')
-        self.A.arm()
-        if arm_B:
-            self.B.arm()
+        resp = self.A.initiate()
+        self.logger.debug(f'A initiated. Response: {resp}')
+        resp = self.B.initiate()
+        self.logger.debug(f'B initiated. Response: {resp}')
+        self.logger.debug(f'.config() TRIGGER INSTRUMENT STATUS: A: {self.A.check_trigger_status()}, B: {self.B.check_trigger_status()}')
+        if arm_B:  # If we need to send arm trigger to B
+            resp = self.A.arm()
+            self.logger.debug(f'ARM trigger sent to A. Response: {resp}')
+            resp = self.B.arm()
+            self.logger.debug(f'ARM trigger sent to B. Response: {resp}')
+        else:
+            flag, resp = self.B.check_initiated()
+            if flag:
+                self.logger.debug(f'B is ready. Status: {resp}')
+                resp = self.A.arm()
+                self.logger.debug(f'ARM trigger sent to A. Response: {resp}')
+            else:
+                self.logger.error(f'B is not ready for external ARM trigger! Status: {resp}')
+                return False, f'B is not ready for external ARM trigger! Status: {resp}'
         self.exp_start_time = time.time()
         return True, f'{mode_name} was configured'
         

@@ -192,7 +192,7 @@ class B2902B(VISA_instrument):
         """
         if self.sim:
             return True, '32767'  # All status entries are true
-        return self.query_resp('status:operation:condition?')
+        return self.query_resp('status:operation:condition?', 'Checking operation condition')
     
     
     def check_trigger_status(self) -> list[str]:
@@ -446,7 +446,7 @@ class B2902B(VISA_instrument):
             arr2 = np.array(s2.split(','), dtype=float)
             if (arr1[0] in [9.91e+37, 9.90e+37, 9.90e-37] or
                 arr2[0] in [9.91e+37, 9.90e+37, 9.90e-37]):
-                print('b2920b_get_sense()', arr1, arr2)
+                # print('b2920b_get_sense()', arr1, arr2)
                 return None
             return arr1, arr2
         return response

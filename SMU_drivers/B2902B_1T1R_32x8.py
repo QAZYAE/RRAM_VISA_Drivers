@@ -268,10 +268,10 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             resistance (float): First resistance in the queue.
         """
         # Calculating time to sleep between acquire attempts
-        if self.trigger_interval > 10e-3:
-            sleep_time = 1e-3
-        else:
-            sleep_time = 0.1 * self.trigger_interval
+        # if self.trigger_interval > 10e-3:
+        #     sleep_time = 1e-3
+        # else:
+        sleep_time = 0.1 * self.trigger_interval
         self.logger.debug(f'ACQUIRED_COUNTER (BEFORE): {self.acquired_counter}, (trigger_count: {self.trigger_count})')
         if self.acquired_counter != self.trigger_count:  # Skip acquire if queue is full
             if self.sim:
@@ -658,6 +658,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                               trigger_count = n_pulses,
                               pulse_width = pulse_width)
         # Configuring triggers and source shapes
+        print(self.trigger_interval)
         for smu in [self.A.SMU1, self.A.SMU2, self.gate_smu, self.temp_smu]:
             self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
                                                acquire_delay=0.3*self.pulse_width))

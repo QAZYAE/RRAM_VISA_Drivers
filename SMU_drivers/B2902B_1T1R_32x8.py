@@ -391,7 +391,11 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                 self.pulse_width = 100e-6
             else:
                 self.pulse_width = pulse_width
-            self.trigger_interval = float(self.settings['ITC_1T1R']['pulse_trigger_interval_factor']) * self.pulse_width
+            if trigger_interval is not None:
+                if trigger_interval < 5 * self.pulse_width:
+                    self.trigger_interval = 5 * self.pulse_width
+                else:
+                    self.trigger_interval = trigger_interval
         else:
             raise RuntimeError(f'_config_init_values: unknown mode: {mode}')
         self.trigger_count = trigger_count
@@ -637,7 +641,8 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         current_compliance: float,
         n_pulses: int,
         read_voltage: float,
-        sign: int = 1
+        sign: int = 1,
+        trigger_interval: float = 0
     ) -> tuple[bool, str]:
         """Configure pulsed retention mode. WARNING: Method doesn't connect the crossbar cell, 
         it should be connected via .connect_cell() method.
@@ -649,6 +654,8 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             read_voltage (float): Read voltage (Volts).
             sign (int, optional): Side where sweep voltage is applied: 1 -- 'BL', 0 -- 'NL'. 
                 Defaults to 1.
+            trigger_interval (float, optional): Trigger interval (seconds). If less then 5 * pulse_width,
+                falls back to 5 * pulse_width. Defaults to 0.
 
         Returns:
             tuple[bool, str]: Good_config_flag (True if instruments were
@@ -656,9 +663,9 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         """
         self._set_init_values(mode = 'pulse',
                               trigger_count = n_pulses,
-                              pulse_width = pulse_width)
+                              pulse_width = pulse_width,
+                              trigger_interval=trigger_interval)
         # Configuring triggers and source shapes
-        print(self.trigger_interval)
         for smu in [self.A.SMU1, self.A.SMU2, self.gate_smu, self.temp_smu]:
             self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
                                                acquire_delay=0.3*self.pulse_width))

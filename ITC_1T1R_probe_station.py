@@ -43,7 +43,7 @@ class ITC_1T1R_32x8_probe_station(B2902B_1T1R_32x8_driver):
         # Check if in simulation mode
         self.sim = False
         for address in [B2902B_1_address, B2902B_2_address]:
-            if address is None:
+            if address is None or address == '':
                 self.sim = True
         if self.sim:
             A_res, B_res = None, None

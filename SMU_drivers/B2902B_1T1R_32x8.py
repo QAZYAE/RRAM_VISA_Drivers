@@ -284,11 +284,11 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                     flag, resp = self.B.check_armed()  # Check if B is ready for trigger
                     if not flag:
                         self.logger.error(f'.sense(): B is not armed! B status: {resp}')
-                        raise RuntimeError(f'.sense(): B is not armed! B status: {resp}')
+                        return f'.sense(): B is not armed! B status: {resp}'
                     resp = self.A.trigger()  # Trigger A
                     if resp.startswith('ERROR'):
                         self.logger.error(f'.sense(): A trigger error: {resp}')
-                        raise RuntimeError(f'.sense(): A trigger error: {resp}')
+                        return f'.sense(): A trigger error: {resp}'
                     else:
                         self.logger.debug('Sense: Trigger sent to instrument A')
                 # ACQUIRE A
@@ -300,10 +300,10 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                     time.sleep(sleep_time)
                 if sense_data_A is None:
                     self.logger.error('Cant obtain sense_A data!')
-                    raise RuntimeError('Cant obtain sense_A data!')
+                    return 'Cant obtain sense_A data!'
                 if isinstance(sense_data_A, str):
                     self.logger.error(f'Sense_A acquire error: {sense_data_A}')
-                    raise RuntimeError(sense_data_A)
+                    return sense_data_A
                 # ACQUIRE B
                 for i in range(acquire_attempts):
                     sense_data_B = self.B.get_sense_data(offset=self.acquired_counter)  # sense_ch1, sense_ch2
@@ -315,10 +315,10 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                     time.sleep(sleep_time)
                 if sense_data_B is None:
                     self.logger.error('Cant obtain sense_B data!')
-                    raise RuntimeError('Cant obtain sense_B data!')
+                    return 'Cant obtain sense_B data!'
                 if isinstance(sense_data_B, str):
                     self.logger.error(f'Sense_B acquire error: {sense_data_B}')
-                    raise RuntimeError(sense_data_B)
+                    return sense_data_B
                 self.logger.debug('Sense_A and sense_B acquired')
                 sense1, sense2 = sense_data_A
                 sense1_B, sense2_B = sense_data_B
@@ -357,9 +357,6 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         except IndexError:
             self.logger.error('Sense queue is empty!')
             return 'Sense queue is empty!'
-        except RuntimeError as e:
-            self.logger.error(f'Sense terminated: {e}')
-            return f'Sense terminated: {e}'
         
         
     def trigger(self) -> None:

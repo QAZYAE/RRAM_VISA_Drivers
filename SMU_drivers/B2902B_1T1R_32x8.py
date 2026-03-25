@@ -90,6 +90,10 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         resps.append(self.B.set_external_trigger_link(pin=1, trigger_layer='arm', function='input', channel=1))
         resps.append(self.A.set_external_trigger_link(pin=2, trigger_layer='trigger', function='output', channel=1))
         resps.append(self.B.set_external_trigger_link(pin=2, trigger_layer='trigger', function='input', channel=1))
+        resps.append(self.A.write_resp('output1:filter off', ''))  # TODO: move somewhere
+        resps.append(self.A.write_resp('output2:filter off', ''))
+        resps.append(self.B.write_resp('output1:filter off', ''))
+        resps.append(self.B.write_resp('output2:filter off', ''))
         for r in resps:
             if r.startswith('ERROR'):
                 self.logger.error(f'B2902B 1T1R 32x8 driver init error!\n{r}')
@@ -666,7 +670,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         for smu in [self.A.SMU1, self.A.SMU2, self.gate_smu, self.temp_smu]:
             self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
                                                acquire_delay=0.3*self.pulse_width))
-            self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.pulse_width))
+            self.resps.append(smu.set_measurement_aperture(aperture=0.2*self.pulse_width))
         for smu in [self.gate_smu, self.temp_smu]:
             self.resps.append(smu.set_source_shape('DC'))
             self.resps.append(smu.set_arm_external(pin=1))  # todo: Вынести номер пина в файл конфигурации

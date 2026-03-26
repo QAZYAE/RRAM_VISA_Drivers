@@ -79,7 +79,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         # Setting multimeter mode for temperature smu
         resps.append(self.temp_smu.set_multimeter_mode(voltage_compliance=1))
         for smu in [self.A.SMU1, self.A.SMU2, self.gate_smu]:
-            resps.append(self.gate_smu.set_smu_mode('voltage'))
+            resps.append(smu.set_smu_mode('voltage'))
         # Configuring data output
         resps.append(self.A.set_data_format('voltage,current,time'))
         resps.append(self.B.set_data_format('voltage,current'))
@@ -670,7 +670,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         for smu in [self.A.SMU1, self.A.SMU2, self.gate_smu, self.temp_smu]:
             self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
                                                acquire_delay=0.3*self.pulse_width))
-            self.resps.append(smu.set_measurement_aperture(aperture=0.2*self.pulse_width))
+            self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.pulse_width))
         for smu in [self.gate_smu, self.temp_smu]:
             self.resps.append(smu.set_source_shape('DC'))
             self.resps.append(smu.set_arm_external(pin=1))  # todo: Вынести номер пина в файл конфигурации

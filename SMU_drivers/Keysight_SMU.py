@@ -29,7 +29,7 @@ class SMU(VISA_module):
             resource (pyvisa.Resource | None): Keysight instrument resource
                 (initiate using :meth:`pyvisa.highlevel.ResourceManager.open_resource`).
                 If resource is None, the program simulates communication.
-            channel (int): Channel number on the instrumetn mainframe.
+            channel (int): Channel number on the instrument mainframe.
             instrument_name (str, optional): Instrument name for responses. Defaults to 'Instrument'.
             parent (B2902B): Parent instrument class.
         """
@@ -49,7 +49,7 @@ class SMU(VISA_module):
             state (str): output state. Valid values: 1|on|0|off.
             
         Returns: 
-            response (str): Command response | error if an error occured.
+            response (str): Command response | error if an error occurred.
         """
         if state.lower() not in ['1', 'on', '0', 'off']:
             return f'ERROR: {self.resp} Invalid state. Valid values: 1|on|0|off (str).'
@@ -61,7 +61,7 @@ class SMU(VISA_module):
 
         Returns:
             response (bool | str): True if output is on, False if output is off. Exception str 
-                if it occured.
+                if it occurred.
         """
         flag, response = self.query_resp(f'output{self.ch}:state?', 'Output state is checked')
         if flag:
@@ -73,7 +73,7 @@ class SMU(VISA_module):
         """Set SMU output to 0V if output is off
 
         Returns:
-            response (str): Command response | error if an error occured.
+            response (str): Command response | error if an error occurred.
         """
         return self.write_resp(f'output{self.ch}:off:mode zero', 'Standby mode is set to 0V')
     
@@ -86,7 +86,7 @@ class SMU(VISA_module):
             mode (str, optional): SMU mode: voltage|current. Defaults to 'voltage'.
 
         Returns:
-            response (str): Command response | error if an error occured.
+            response (str): Command response | error if an error occurred.
         """
         if mode.lower() not in ['voltage', 'current']:
             return f'ERROR: {self.resp} Invalid SMU mode. Valid values: voltage|current (str).'
@@ -102,7 +102,7 @@ class SMU(VISA_module):
             shape (str, optional): Output shape: DC|pulse. Defaults to 'DC'.
 
         Returns:
-            response (str): Command response | error if an error occured.
+            response (str): Command response | error if an error occurred.
         """
         if shape.lower() not in ['dc', 'pulse']:
             return f'ERROR: {self.resp} Invalid output shape. Valid values: DC|pulse (str).'
@@ -115,12 +115,12 @@ class SMU(VISA_module):
 
         Args:
             width (float, optional): Pulse width (seconds). Minimum value is 50 us, 
-                minimum pulse perion is 100 us. defaults to 50 us.
+                minimum pulse period is 100 us. defaults to 50 us.
             delay (float, optional): Pulse delay (seconds): time from starting the pulse 
                 base output to the pulse level transition. Defaults to 0.
 
         Returns:
-            response (str): Command response | error if an error occured.
+            response (str): Command response | error if an error occurred.
         """
         return self.write_resp(
             ';:'.join([f'source{self.ch}:pulse:width {width}',
@@ -142,7 +142,7 @@ class SMU(VISA_module):
                 Defaults to 300 uA.
 
         Returns:
-            response (str): Command response | error if an error occured.
+            response (str): Command response | error if an error occurred.
         """
         return self.write_resp(
             ';:'.join([f'source{self.ch}:voltage:mode fix',
@@ -165,14 +165,14 @@ class SMU(VISA_module):
         Args:
             stop (float): Stop voltage (source), Volts
             n_points (int): Number of sweep points (In a single direction. This number is
-                automaticly doubled for double sweep)
+                automatically doubled for double sweep)
             start (float, optional): Start voltage (source), Volts. Defaults to 0.
             double (bool, optional): if True, sets sweep mode to double sweep. Double sweep 
                 performs the sweep from start to stop to start. Defaults to False.
             current_compliance (float, optional): Current compliance level, Amperes. Defaults to 300 uA.
 
         Returns:
-            response (str): Command response | error if an error occured.
+            response (str): Command response | error if an error occurred.
         """
         dir_mode = 'double' if double else 'single'
         return self.write_resp(
@@ -197,7 +197,7 @@ class SMU(VISA_module):
             current_compliance (float, optional): Current compliance level, Amperes. Defaults to 300 uA.
 
         Returns:
-            response (str): Command response | error if an error occured.
+            response (str): Command response | error if an error occurred.
         """
         try:
             voltage_str = ','.join(map(str, voltage_list))
@@ -212,7 +212,7 @@ class SMU(VISA_module):
         
         
     def set_base_voltage_immediate(self, voltage, current_compliance: float = 100e-3) -> str:
-        """Set base voltage output, applied immediately. WARNING: Voltage is applied on recieving command,
+        """Set base voltage output, applied immediately. WARNING: Voltage is applied on receiving command,
             not on trigger. Voltage will not turn off after measurements are done, 
             it should be set to 0 via this method.
 
@@ -221,7 +221,7 @@ class SMU(VISA_module):
             current_compliance (float, optional): Current compliance level, Amperes. Defaults to 300 uA.
 
         Returns:
-            response (str): Command response | error if an error occured.
+            response (str): Command response | error if an error occurred.
         """
         return self.write_resp(
             ';:'.join([f'sense{self.ch}:current:DC:protection:level {current_compliance}',
@@ -240,7 +240,7 @@ class SMU(VISA_module):
                 (ignores aperture parameter). Defaults to False.
 
         Returns:
-            response (str): Command response | error if an error occured.
+            response (str): Command response | error if an error occurred.
         """
         meas_type = 'current' if self.smu_mode == 'voltage' else 'voltage'
         if auto:
@@ -260,7 +260,7 @@ class SMU(VISA_module):
             voltage_compliance (float, optional): Voltage compliance (Volts). Defaults to 1.
 
         Returns:
-            response (str): Command response | error if an error occured.
+            response (str): Command response | error if an error occurred.
         """
         self.smu_mode = 'current'
         return self.write_resp(
@@ -279,12 +279,12 @@ class SMU(VISA_module):
 
         Args:
             offset (int, optional): Indicates the beginning of the data received. The index is from 
-                0 to maximum (depends on the buffer state). Defaults to 0 (All data is recieved).
-                If offset is `-1`, latest data entry is recieved.
+                0 to maximum (depends on the buffer state). Defaults to 0 (All data is received).
+                If offset is `-1`, latest data entry is received.
 
         Returns:
             data (np.ndarray | str | None): Data specified by B2902B.set_data_format(). 
-                Returns error if an error occured, returns None if the buffer is empty.
+                Returns error if an error occurred, returns None if the buffer is empty.
         """
         if not isinstance(offset, int) or offset < -1:
             return f'ERROR: {self.resp} invalid offset.'
@@ -314,7 +314,7 @@ class SMU(VISA_module):
             RuntimeError: Unknown function. Function must be one of the following items:
                 current|resistance|source|status|time|voltage
         Returns:
-            data (np.ndarray | str): Data array. Returns error if an error occured.
+            data (np.ndarray | str): Data array. Returns error if an error occurred.
         """
         if function == '':
             func, fresp = '', ''
@@ -337,7 +337,7 @@ class SMU(VISA_module):
             delay (float, optional): ARM delay in seconds. Defaults to 0.
 
         Returns:
-            response (str): Command response | error if an error occured.            
+            response (str): Command response | error if an error occurred.            
         """
         return self.write_resp(
             ';:'.join([f'arm{self.ch}:source BUS',
@@ -358,7 +358,7 @@ class SMU(VISA_module):
                 or current (seconds). Defaults to 0.
 
         Returns:
-            response (str): Command response | error if an error occured.                
+            response (str): Command response | error if an error occurred.                
         """
         return self.write_resp(
             ';:'.join([f'trigger{self.ch}:source BUS',
@@ -366,7 +366,7 @@ class SMU(VISA_module):
                        f'trigger{self.ch}:acquire:delay {acquire_delay}',
                        f'trigger{self.ch}:transient:delay {transient_delay}']),
             f'TRIGGER trigger source is set to BUS, count = {count}, ' + \
-                f'acquire_delay = {acquire_delay} s, transient_delat = {transient_delay} s'
+                f'acquire_delay = {acquire_delay} s, transient_delay = {transient_delay} s'
         )
         
         
@@ -379,7 +379,7 @@ class SMU(VISA_module):
             delay (float, optional): arm delay in seconds. Defaults to 0.
         
         Returns:
-            response (str): Command response | error if an error occured.  
+            response (str): Command response | error if an error occurred.  
         """
         return self.write_resp(
             ';:'.join([f'arm{self.ch}:source timer',
@@ -405,7 +405,7 @@ class SMU(VISA_module):
                 or current (seconds). Defaults to 0.
         
         Returns:
-            response (str): Command response | error if an error occured.  
+            response (str): Command response | error if an error occurred.  
         """
         return self.write_resp(
             ';:'.join([f'trigger{self.ch}:source timer',
@@ -428,7 +428,7 @@ class SMU(VISA_module):
             delay (float, optional): arm delay in seconds. Defaults to 0.
             
         Returns:
-            response (str): Command response | error if an error occured.  
+            response (str): Command response | error if an error occurred.  
         """
         if pin not in list(range(1, 15)):
             return f'ERROR: {self.resp} Invalid pin number. Only pins 1-14 may be used as trigger input'
@@ -454,7 +454,7 @@ class SMU(VISA_module):
                 or current (seconds). Defaults to 0.
         
         Returns:
-            response (str): Command response | error if an error occured.  
+            response (str): Command response | error if an error occurred.  
         """
         if pin not in list(range(1, 15)):
             return f'ERROR: {self.resp} Invalid pin number. Only pins 1-14 may be used as trigger input'
@@ -477,7 +477,7 @@ class SMU(VISA_module):
             state (str, optional): output state. Valid values: 1|on|0|off. Defaults to 'on'.
 
         Returns:
-            response (str): Command response | error if an error occured.
+            response (str): Command response | error if an error occurred.
         """
         if pin not in list(range(1, 15)):
             return f'ERROR: {self.resp} Invalid pin number. Only pins 1-14 may be used as trigger input'
@@ -499,7 +499,7 @@ class SMU(VISA_module):
             state (str, optional): output state. Valid values: 1|on|0|off. Defaults to 'on'.
 
         Returns:
-            response (str): Command response | error if an error occured.
+            response (str): Command response | error if an error occurred.
         """
         if pin not in list(range(1, 15)):
             return f'ERROR: {self.resp} Invalid pin number. Only pins 1-14 may be used as trigger input'
@@ -528,7 +528,7 @@ class SMU(VISA_module):
             wait_interval (float, optional): Time to wait between attempts (seconds).Defaults to 1 ms.
 
         Returns:
-            response (str): Command response | error if an error occured.        
+            response (str): Command response | error if an error occurred.        
         """
         if self.parent is None:
             return self.write_resp(f'init (@{self.ch})', 'SMU initiated')
@@ -551,7 +551,7 @@ class SMU(VISA_module):
             wait_interval (float, optional): Time to wait between attempts (seconds).Defaults to 1 ms.
 
         Returns:
-            response (str): Command response | error if an error occured.        
+            response (str): Command response | error if an error occurred.        
         """
         if self.parent is None:
             return self.write_resp(f'arm (@{self.ch})', 'ARM trigger was sent')
@@ -574,7 +574,7 @@ class SMU(VISA_module):
             wait_interval (float, optional): Time to wait between attempts (seconds).Defaults to 1 ms.
 
         Returns:
-            response (str): Command response | error if an error occured.        
+            response (str): Command response | error if an error occurred.        
         """
         if self.parent is None:
             return self.write_resp(f'trigger (@{self.ch})', 'TRIGGER trigger was sent')

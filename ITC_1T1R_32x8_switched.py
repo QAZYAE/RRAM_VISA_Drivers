@@ -9,14 +9,14 @@ import os
 from RRAM_VISA_Drivers.SMU_drivers import B2902B_1T1R_32x8_driver
 from RRAM_VISA_Drivers.Switch_drivers import Keysight_34980A_1T1R_32x8
 from RRAM_VISA_Drivers.gui_connection import (
-    set_driver_instrumetns, 
+    set_driver_instruments, 
     check_connection_B2902B,
     check_connection_34980A
 )
 
 
 
-set_driver_instrumetns(
+set_driver_instruments(
     driver_name='ITC_1T1R_32x8_switched', 
     instruments={
         'B2902B-1 (BL,NL)': check_connection_B2902B,
@@ -42,11 +42,11 @@ class ITC_1T1R_32x8_switched(B2902B_1T1R_32x8_driver):
         """Driver for measuring 1T1R 32x8 crossbar arrays with a switch unit.
 
         Args:
-            B2902B_1_address (str): VISA-adress for Keysight B2902B which controls
+            B2902B_1_address (str): VISA-address for Keysight B2902B which controls
                 Bit Line (1st channel) and Net Line (2nd channel).
-            B2902B_2_address (str): VISA-adress for Keysight B2902B which controls
+            B2902B_2_address (str): VISA-address for Keysight B2902B which controls
                 Word Line (1st channel).
-            Switch_address (str): VISA-adress for Keysight 34980A which controls
+            Switch_address (str): VISA-address for Keysight 34980A which controls
                 cell selection.
             VISA_library_path (str, optional): Path to VISA library. If not provided, 
                 pyvisa tries to find the library on the computer. Defaults to ''.
@@ -85,7 +85,7 @@ class ITC_1T1R_32x8_switched(B2902B_1T1R_32x8_driver):
         """
         return 'CID_1T1R_32x8_driver: uses with two Keysight B2902B Source-Measure ' + \
                'modules and a Keysight_34980A Switch unit for measuring 32x8 1T1R ' + \
-               'memristor crossbar arrays'
+               'memristive crossbar arrays'
                
                
     # .clear_instruments() in parent class

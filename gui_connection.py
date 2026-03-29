@@ -10,7 +10,7 @@ _driver_instruments: dict[str: dict[str: Callable]] = {}
 
 
 
-def set_driver_instrumetns(driver_name: str, instruments: dict) -> None:
+def set_driver_instruments(driver_name: str, instruments: dict) -> None:
     """Set list of instruments names required for the driver
 
     Args:
@@ -93,7 +93,7 @@ def reset_instrument(visa_address: str, visa_library_path: str = '') -> tuple[bo
 
     Returns:
         (flag, response) (tuple[bool, str]): Flag is True if the instrument was reset, resonse 
-            contains an error if occured.
+            contains an error if occurred.
     """
     if visa_address == '':
         return True, ''

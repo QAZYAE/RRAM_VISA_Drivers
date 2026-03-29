@@ -27,7 +27,7 @@ switch = Keysight_34980A_1T1R_32x8(switch_resource, config_path=config_path)
 
 
 # Проверка подключения и устройства:
-switch.check_instument_connection()  # True если подключено правильное устройство
+switch.check_instrument_connection()  # True если подключено правильное устройство
 
 
 

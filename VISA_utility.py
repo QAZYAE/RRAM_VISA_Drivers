@@ -61,7 +61,7 @@ class VISA_module:
                 Defaults to False.
             
         Returns:
-            commands (list): List of execuded commands or Visa Errors.
+            commands (list): List of executed commands or Visa Errors.
         """
         if type(commands) is not list:
             commands = [commands]
@@ -88,7 +88,7 @@ class VISA_module:
 
         Returns:
             response (str): normal response if the command was sent. 'ERROR: ```error``` if 
-                an error occured.'  
+                an error occurred.'  
         """
         if self.sim:
             return f'{self.resp} {normal_response}'
@@ -106,7 +106,7 @@ class VISA_module:
             command (str): SCPI command.
 
         Returns:
-            query_response (str): Instrument response. Returns Visa Error if an exception occured.
+            query_response (str): Instrument response. Returns Visa Error if an exception occurred.
         """
         if self.sim:
             return f'{self.resp} querying command {command}'
@@ -127,8 +127,8 @@ class VISA_module:
         Returns:
             executed, response (tuple[bool, str]): 
                 executed is True if the query was successful.
-                response is sim_resp is in simulation mode, exception if an exception occured
-                    and query_respose if the query was successful.
+                response is sim_resp is in simulation mode, exception if an exception occurred
+                    and query_response if the query was successful.
         """
         if self.sim:
             return False, f'{self.resp} {sim_resp}'
@@ -193,7 +193,7 @@ class VISA_instrument(VISA_module):
         return self.query('*IDN?')
     
     
-    def check_instument_connection(self) -> bool:
+    def check_instrument_connection(self) -> bool:
         """Check if the instrument is connected it and validate instrument type.
 
         Returns:
@@ -209,7 +209,7 @@ class VISA_instrument(VISA_module):
         """Get errors from instrument's error queue.
 
         Returns:
-            errors (list | None): List of erros. Returns None if there are no errors.
+            errors (list | None): List of errors. Returns None if there are no errors.
         """
         if self.sim:
             return None
@@ -233,7 +233,7 @@ class VISA_instrument(VISA_module):
         """Resets volatile memory of the instrument.
         
         Returns:
-            response (str): Error if an error occured.
+            response (str): Error if an error occurred.
         """
         if self.sim:
             return 'Simulation: Instrument was reset.'
@@ -247,7 +247,7 @@ class VISA_instrument(VISA_module):
         """Clear the resource (VISA method).
 
         Returns:
-            response (str): Error if an error occured.
+            response (str): Error if an error occurred.
         """
         if self.sim:
             return 'Simulation: Instrument was cleared.'

@@ -63,7 +63,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         # Checking connections and instrument types
         for inst, name in zip([self.A, self.B], 
                               ['B2902B_A', 'B2902B_B']):
-            flag = inst.check_instument_connection()
+            flag = inst.check_instrument_connection()
             inst.get_errors()  # Clear error queue
             if not flag:
                 self.logger.critical('B2902B 1T1R 32x8 driver init error!')
@@ -121,7 +121,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         """
         return 'B2902B_1T1R_32x8_driver: uses with two Keysight B2902B Source-Measure ' + \
                'modules and a Keysight_34980A Switch unit for measuring 32x8 1T1R ' + \
-               'memristor crossbar arrays'
+               'memristive crossbar arrays'
     
         
     def clear_instruments(self) -> bool:
@@ -365,7 +365,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         
     def trigger(self) -> None:
         """Send immediate trigger, skip one acquire value"""
-        self.logger.debug(f'.tigger() TRIGGER INSTRUMENT STATUS: A: {self.A.check_trigger_status()}, B: {self.B.check_trigger_status()}')
+        self.logger.debug(f'.trigger() TRIGGER INSTRUMENT STATUS: A: {self.A.check_trigger_status()}, B: {self.B.check_trigger_status()}')
         flag, resp = self.B.check_armed()  # Check if B is ready for trigger
         if not flag:
             self.logger.error(f'.trigger(): B is not armed! B status: {resp}')
@@ -530,7 +530,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
 
         Returns:
             flag, response, resistance (bool, str, float): config_flag (True if configured 
-            successfully), instrument_response (error if occured), Resistance read by the read pulse.
+            successfully), instrument_response (error if occurred), Resistance read by the read pulse.
         """
         if apply_voltage == 0:
             trigger_count = 1

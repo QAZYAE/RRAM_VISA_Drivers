@@ -58,7 +58,7 @@ class Keysight_34980A_1T1R_32x8(VISA_instrument):
         self.MUX = Keysight_34922A_70ch_MUX(resource, scheme_data['BL_slot'])
         self.MAT = Keysight_34932A_2x4x16_Matrix(resource, scheme_data['WLNL_slot'])
         # Checking connection
-        flag = self.check_instument_connection()
+        flag = self.check_instrument_connection()
         self.get_errors()  # Clearing error queue
         if not flag: 
             print('Switch unit init ERROR')
@@ -80,7 +80,7 @@ class Keysight_34980A_1T1R_32x8(VISA_instrument):
         """Disconnects all MUX channels and Matrix intersections in corresponding modules.
 
         Returns:
-            response (str): Error if an error occured.
+            response (str): Error if an error occurred.
         """
         if self.sim:
             return 'Simulation: All MUX channels and matrix intersections were disconnected'
@@ -93,12 +93,12 @@ class Keysight_34980A_1T1R_32x8(VISA_instrument):
     
     
     def standby(self) -> str:
-        """Truns on Standby mode:
+        """Turns on Standby mode:
             All MUX channels are disconnected.
             All WL/NL matrix column are connected to the GND row (All WL are grounded).
 
         Returns:
-            response (str): Error if an error occured.
+            response (str): Error if an error occurred.
         """
         self.mode = 'standby'
         if self.sim:
@@ -129,7 +129,7 @@ class Keysight_34980A_1T1R_32x8(VISA_instrument):
                 Used in one-SMU mode only. Defaults to 'SET'.
 
         Returns:
-            response (str): Error if an error occured.
+            response (str): Error if an error occurred.
         """
         self.mode = 'connected'
         if self.sim:
@@ -160,7 +160,7 @@ class Keysight_34980A_1T1R_32x8(VISA_instrument):
         for resp in resps:
             if resp.startswith('ERROR') or resp.startswith('Exception'):
                 self.disconnect_all()
-                return resp + ' | All MUX channels and Matrix intersectrions were disconnected.'
+                return resp + ' | All MUX channels and Matrix intersections were disconnected.'
         return f'Cell {row}-{column} was connected.'
     
     
@@ -171,7 +171,7 @@ class Keysight_34980A_1T1R_32x8(VISA_instrument):
             switch_type (str): New switch type ('SET' or 'RESET').
 
         Returns:
-            response (str): Error if an error occured.
+            response (str): Error if an error occurred.
         """
         if not self.one_SMU:
             return
@@ -191,5 +191,5 @@ class Keysight_34980A_1T1R_32x8(VISA_instrument):
         for resp in resps:
             if resp.startswith('ERROR') or resp.startswith('Exception'):
                 self.disconnect_all()
-                return resp + ' | All MUX channels and Matrix intersectrions were disconnected.'
+                return resp + ' | All MUX channels and Matrix intersections were disconnected.'
         return f'The switch type was changed to {switch_type}'

@@ -5,11 +5,11 @@
 """
 import pyvisa
 from RRAM_VISA_Drivers.SMU_drivers import B2902B_1T1R_32x8_driver
-from RRAM_VISA_Drivers.gui_connection import set_driver_instrumetns, check_connection_B2902B
+from RRAM_VISA_Drivers.gui_connection import set_driver_instruments, check_connection_B2902B
 
 
 
-set_driver_instrumetns(
+set_driver_instruments(
     driver_name='ITC_1T1R_32x8_probe_station', 
     instruments={
         'B2902B-1 (BL,NL)': check_connection_B2902B,
@@ -33,9 +33,9 @@ class ITC_1T1R_32x8_probe_station(B2902B_1T1R_32x8_driver):
         """Driver for measuring 1T1R 32x8 crossbar arrays without a switch unit.
 
         Args:
-            B2902B_1_address (str): VISA-adress for Keysight B2902B which controls
+            B2902B_1_address (str): VISA-address for Keysight B2902B which controls
                 Bit Line (1st channel) and Net Line (2nd channel).
-            B2902B_2_address (str): VISA-adress for Keysight B2902B which controls
+            B2902B_2_address (str): VISA-address for Keysight B2902B which controls
                 Word Line (1st channel).
             VISA_library_path (str, optional): Path to VISA library. If not provided, 
                 pyvisa tries to find the library on the computer. Defaults to ''.

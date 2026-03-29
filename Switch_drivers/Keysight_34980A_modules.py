@@ -24,7 +24,7 @@ class Keysight_34922A_70ch_MUX(VISA_module):
             resource (pyvisa.Resource | None): Keysight 34980A resource
                 (initiate using :meth:`pyvisa.highlevel.ResourceManager.open_resource`).
                 If resource is None, the program simulates communication.
-            slot (int): Mainfraime slot number of the Keysight 34922A Multiplexer (1 through 8).
+            slot (int): Mainframe slot number of the Keysight 34922A Multiplexer (1 through 8).
         """
         super().__init__(resource)
         if slot < 1 or slot > 8:
@@ -33,14 +33,14 @@ class Keysight_34922A_70ch_MUX(VISA_module):
         
         
     def check_channel(self, channel: int) -> Union[bool, str]:
-        """Check if the multiplexer channel is opend or closed.
+        """Check if the multiplexer channel is opened or closed.
 
         Args:
             channel (int): Multiplexer channel (1 through 70).
 
         Returns:
             response (bool | str): True if the channel is connected (switch is closed), 
-                False if it's open. Returns error string if an error occured.
+                False if it's open. Returns error string if an error occurred.
         """
         if self.sim:
             return 
@@ -97,7 +97,7 @@ class Keysight_34922A_70ch_MUX(VISA_module):
             channel (int): Channel to connect.
 
         Returns:
-            query_response (str): Error if an error occured.
+            query_response (str): Error if an error occurred.
         """
         if self.sim:
             return f'Simulation: Channel {channel} in slot {self.slot} is connected exclusively.'
@@ -154,7 +154,7 @@ class Keysight_34922A_70ch_MUX(VISA_module):
         """Disconnect all channels on the multiplexer (open all switches).
 
         Returns:
-            response (str): Error if an error occured.
+            response (str): Error if an error occurred.
         """
         if self.sim:
             return f'Simulation: All channels in slot {self.slot} were disconnected.'
@@ -169,8 +169,8 @@ class Keysight_34922A_70ch_MUX(VISA_module):
 
         Returns:
             connection_list (list | str): List of boolean variables for each channel (length is 70): True if
-                channel is connected, False otherwise. Returns error string if an error occured. 
-                Returns None if in simulatioin mode.
+                channel is connected, False otherwise. Returns error string if an error occurred. 
+                Returns None if in simulation mode.
         """
         if self.sim:
             return
@@ -209,7 +209,7 @@ class Keysight_34922A_70ch_MUX(VISA_module):
                 self.write(f'route:close:exclusive (@{channel_str[:-1]})')
             return f'Multiplexer in slot {self.slot} was configured to |{result} |.'
         except Exception as e:
-            return f'Exception occured:{e}'
+            return f'Exception occurred:{e}'
         
         
     def configure_all_and_check(self, connection_list: list) -> str:
@@ -220,11 +220,11 @@ class Keysight_34922A_70ch_MUX(VISA_module):
                 True if intersection needs to be connected, False if it needs to be disconnected.
 
         Returns:
-            response (str): Message with configuration, if it was successfull. Error if occured. In configuration,
+            response (str): Message with configuration, if it was successful. Error if occurred. In configuration,
                 'C' is written for connected columns, 'D' for disconnected.
         """
         if self.sim:
-            result = f'Simultation: Multiplexer in slot {self.slot} was configured to'
+            result = f'Simulation: Multiplexer in slot {self.slot} was configured to'
             for v in connection_list:
                 result += ' C' if v else ' D'
             return result + ' |.'
@@ -252,7 +252,7 @@ class Keysight_34922A_70ch_MUX(VISA_module):
                 return f'ERROR: Could not perform connections. All channels in slot {self.slot} were disconnected.'
             return f'Multiplexer in slot {self.slot} was configured to |{result} |.'
         except Exception as e:
-            return f'Exception occured:{e}'
+            return f'Exception occurred:{e}'
         
 
 
@@ -273,7 +273,7 @@ class Keysight_34932A_2x4x16_Matrix(VISA_module):
             resource (Union[pyvisa.Resource, None]): Keysight 34980A resource
                 (initiate using :meth:`pyvisa.highlevel.ResourceManager.open_resource`).
                 If resource is None, the program simulates communication.
-            slot (int): Mainfraime slot number of the Keysight 34932A Matrix (1 through 8).
+            slot (int): Mainframe slot number of the Keysight 34932A Matrix (1 through 8).
         """
         super().__init__(resource)
         if slot < 1 or slot > 8:
@@ -289,8 +289,8 @@ class Keysight_34932A_2x4x16_Matrix(VISA_module):
             column (int): Intersection column (1 through 16).
             
         Returns:
-            connected (bool | str): True if the intersectioin is connected (switch is closed), 
-                False if it's open. Returns error string if an error occured.
+            connected (bool | str): True if the intersection is connected (switch is closed), 
+                False if it's open. Returns error string if an error occurred.
         """
         if self.sim:
             return
@@ -387,7 +387,7 @@ class Keysight_34932A_2x4x16_Matrix(VISA_module):
         """Disconnect all intersections in the matrix (open all switches).
 
         Returns:
-            response (str): Error if an error occured.
+            response (str): Error if an error occurred.
         """
         if self.sim:
             return f'Simulation: All matrix intersections in slot {self.slot} were disconnected.'
@@ -405,7 +405,7 @@ class Keysight_34932A_2x4x16_Matrix(VISA_module):
             except_rows (tuple): Tuple of row numbers (int) in which intersections will not be closed.
 
         Returns:
-            response (str): Error if an error occured.
+            response (str): Error if an error occurred.
         """
         if self.sim:
             return f'Simulation: All matrix intersections except rows {except_rows} ' + \
@@ -430,7 +430,7 @@ class Keysight_34932A_2x4x16_Matrix(VISA_module):
         Returns: 
             connection_list (list | str): List of boolean variables for each column (length is 16): True if
                 intersection with this column is connected, False otherwise. Returns error string if an
-                error occured.
+                error occurred.
         """
         if self.sim:
             return
@@ -476,7 +476,7 @@ class Keysight_34932A_2x4x16_Matrix(VISA_module):
                 self.write(f'route:open (@{disconnect_str[:-1]})')
             return f'Row {row} in slot {self.slot} was configured to |{result} |.'
         except Exception as e:
-            return f'Exception occured: {e}'
+            return f'Exception occurred: {e}'
         
         
     def configure_row_and_check(self, row: int, connection_list: list) -> str:
@@ -488,11 +488,11 @@ class Keysight_34932A_2x4x16_Matrix(VISA_module):
                 True if intersection needs to be connected, False if it needs to be disconnected.
 
         Returns:
-            response (str): Message with configuration, if it was successfull. Error if occured. In configuration,
+            response (str): Message with configuration, if it was successful. Error if occurred. In configuration,
                 'C' is written for connected columns, 'D' for disconnected.
         """
         if self.sim:
-            result = f'Simultation: Row {row} in slot {self.slot} was configured to'
+            result = f'Simulation: Row {row} in slot {self.slot} was configured to'
             for v in connection_list:
                 result += ' C' if v else ' D'
             return result + ' |.'
@@ -525,4 +525,4 @@ class Keysight_34932A_2x4x16_Matrix(VISA_module):
                     'were disconnected.'
             return f'Row {row} in slot {self.slot} was configured to |{result} |.'
         except Exception as e:
-            return f'Exception occured: {e}'
+            return f'Exception occurred: {e}'

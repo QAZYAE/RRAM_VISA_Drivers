@@ -46,7 +46,7 @@ class B2902B(VISA_instrument):
             state (str): Output state. Valid values: 1|on|0|off.
 
         Returns:
-            response (str): Command response | error if an error occured.
+            response (str): Command response | error if an error occurred.
         """
         r1 = self.SMU1.set_output_state(state)
         r2 = self.SMU2.set_output_state(state)
@@ -57,7 +57,7 @@ class B2902B(VISA_instrument):
         """Sets SMU output to 0V if output is off (for both channels).
 
         Returns:
-            response (str): Command response | error if an error occured.
+            response (str): Command response | error if an error occurred.
         """
         r1 = self.SMU1.set_standby_zero()
         r2 = self.SMU2.set_standby_zero()
@@ -72,7 +72,7 @@ class B2902B(VISA_instrument):
             time (float): Duration in seconds. Valid values are from 0.05 to 12.75 s.
 
         Returns:
-            response (str): Command response | error if an error occured.
+            response (str): Command response | error if an error occurred.
         """
         return self.write_resp(f'system:beeper:immediate {frequency},{time}',
                                f'Beep at the frequency {frequency} Hz for {time} s')
@@ -86,7 +86,7 @@ class B2902B(VISA_instrument):
                 Several elements may be separated by a comma: `'voltage,current,resistance,time'`.
 
         Returns:
-            response (str): Command response | error if an error occured.
+            response (str): Command response | error if an error occurred.
         """
         return self.write_resp(f'format:elements:sense {form}',
                                f'Data output format is set to {form}')
@@ -96,7 +96,7 @@ class B2902B(VISA_instrument):
         """Gets current data format from the instrument.
 
         Returns:
-            format (str): current data format | error if an error occured. 
+            format (str): current data format | error if an error occurred. 
         """
         return self.query_resp('format:elements:sense?', 
                                'Getting current data format from the instrument')
@@ -110,7 +110,7 @@ class B2902B(VISA_instrument):
             function (str): Pin function: `'input'` (trigger input) or `'output'` (trigger output).
             
         Returns:
-            response (str): Command response | error if an error occured.
+            response (str): Command response | error if an error occurred.
         """
         if pin not in list(range(1, 15)):
             return f'ERROR: {self.resp} Invalid pin number. Only pins 1-14 may be used as trigger input'
@@ -134,7 +134,7 @@ class B2902B(VISA_instrument):
             channel (str, optional): Output trigger channel on the master instrument. Defaults to 1.
             
         Returns:
-            response (str): Command response | error if an error occured.
+            response (str): Command response | error if an error occurred.
         """
         if pin not in list(range(1, 15)):
             return f'ERROR: {self.resp} Invalid pin number. Only pins 1-14 may be used as trigger input'
@@ -164,7 +164,7 @@ class B2902B(VISA_instrument):
                 Defaults to 1 ms.
 
         Returns:
-            response (str): Command response | error if an error occured. 
+            response (str): Command response | error if an error occurred. 
         """
         if self.sim: 
             return 'Instrument is idle in 0 attempts'
@@ -179,7 +179,7 @@ class B2902B(VISA_instrument):
             if i > 0:
                 self.get_errors()  # Clearing query unterminated errors
             return f'Instrument is idle in {i} attempts'
-        return f'ERROR: {self.resp}\n\tWait for IDLE unsuccessfull: {response}'
+        return f'ERROR: {self.resp}\n\tWait for IDLE unsuccessful: {response}'
     
     
     def get_raw_trigger_status(self) -> str:
@@ -187,7 +187,7 @@ class B2902B(VISA_instrument):
 
         Returns:
             (flag, response) (tuple[bool, str]): Flag is True if the query was 
-                successfull, response is error or operation condition. The 
+                successful, response is error or operation condition. The 
                 condition is the sum of the binary values for the set bits.
         """
         if self.sim:
@@ -340,7 +340,7 @@ class B2902B(VISA_instrument):
             return f'ERROR: syntax in B2902B._move_layer(): unknown command {command}'
         # Channel checking
         if channel not in [1, 2, '1', '2', '1,2']:
-            return f'ERROR: {self.resp} {meth}: wrong channgel number: "{channel}"'
+            return f'ERROR: {self.resp} {meth}: wrong channel number: "{channel}"'
         else:
             ch = channel
         # Instrument status checking
@@ -370,7 +370,7 @@ class B2902B(VISA_instrument):
             wait_interval (float, optional): Time to wait between attempts (seconds).Defaults to 1 ms.
 
         Returns:
-            response (str): Command response | error if an error occured.        
+            response (str): Command response | error if an error occurred.        
         """
         return self._move_layer('init', channel, check_status, attempts, wait_interval)
     
@@ -392,7 +392,7 @@ class B2902B(VISA_instrument):
             wait_interval (float, optional): Time to wait between attempts (seconds). Defaults to 1 ms.
 
         Returns:
-            response (str): Command response | error if an error occured.        
+            response (str): Command response | error if an error occurred.        
         """
         return self._move_layer('arm', channel, check_status, attempts, wait_interval)
     
@@ -414,7 +414,7 @@ class B2902B(VISA_instrument):
             wait_interval (float, optional): Time to wait between attempts (seconds). Defaults to 1 ms.
 
         Returns:
-            response (str): Command response | error if an error occured.        
+            response (str): Command response | error if an error occurred.        
         """
         return self._move_layer('trigger', channel, check_status, attempts, wait_interval)
     
@@ -425,12 +425,12 @@ class B2902B(VISA_instrument):
 
         Args:
             offset (int, optional): Indicates the beginning of the data received. The index is from 
-                0 to maximum (depends on the buffer state). Defaults to 0 (All data is recieved).
-                If offset is `-1`, latest data entry is recieved.
+                0 to maximum (depends on the buffer state). Defaults to 0 (All data is received).
+                If offset is `-1`, latest data entry is received.
 
         Returns:
             data (tuple[np.ndarray] | str | None): Data specified by B2902B.set_data_format().
-                Returns error if an error occured, returns None is the buffer is empty.
+                Returns error if an error occurred, returns None is the buffer is empty.
         """
         if not isinstance(offset, int) or offset < -1:
             return f'ERROR: {self.resp} invalid offset.'
@@ -465,7 +465,7 @@ class B2902B(VISA_instrument):
                 current|resistance|source|status|time|voltage
         Returns:
             data (tuple[np.ndarray] | str): Data array for SMU1 and SMU2. 
-                Returns error if an error occured.
+                Returns error if an error occurred.
         """
         if function == '':
             func, fresp = '', ''

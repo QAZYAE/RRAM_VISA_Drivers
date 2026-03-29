@@ -78,6 +78,20 @@ class SMU(VISA_module):
         return self.write_resp(f'output{self.ch}:off:mode zero', 'Standby mode is set to 0V')
     
     
+    def set_output_filter(self, state: str) -> str:
+        """Set output filter state (ON to obtain clean source output without spikes and overshooting)
+
+        Args:
+            state (str): Filter state. Valid values: 1|on|0|off.
+
+        Returns:
+            response (str): Command response | error if an error occurred.
+        """
+        if state.lower() not in ['1', 'on', '0', 'off']:
+            return f'ERROR: {self.resp} Invalid state. Valid values: 1|on|0|off (str).'
+        return self.write_resp(f'output{self.ch}:filter {state}', f'Output filter is {state}')
+    
+    
     def set_smu_mode(self, mode: str = 'voltage') -> str:
         """Set SMU mode: `voltage` for applying voltage and measuring current; `current` for applying 
             current and measuring voltage.

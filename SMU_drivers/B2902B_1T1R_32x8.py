@@ -90,10 +90,8 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         resps.append(self.B.set_external_trigger_link(pin=1, trigger_layer='arm', function='input', channel=1))
         resps.append(self.A.set_external_trigger_link(pin=2, trigger_layer='trigger', function='output', channel=1))
         resps.append(self.B.set_external_trigger_link(pin=2, trigger_layer='trigger', function='input', channel=1))
-        resps.append(self.A.write_resp('output1:filter off', ''))  # TODO: move somewhere
-        resps.append(self.A.write_resp('output2:filter off', ''))
-        resps.append(self.B.write_resp('output1:filter off', ''))
-        resps.append(self.B.write_resp('output2:filter off', ''))
+        resps.append(self.A.set_output_filter('off'))
+        resps.append(self.B.set_output_filter('off'))
         for r in resps:
             if r.startswith('ERROR'):
                 self.logger.error(f'B2902B 1T1R 32x8 driver init error!\n{r}')

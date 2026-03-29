@@ -64,6 +64,21 @@ class B2902B(VISA_instrument):
         return f'{r1}\n{r2}'
     
     
+    def set_output_filter(self, state: str) -> str:
+        """Set output filter state  for both channels
+            (ON to obtain clean source output without spikes and overshooting)
+
+        Args:
+            state (str): Filter state. Valid values: 1|on|0|off.
+
+        Returns:
+            response (str): Command response | error if an error occurred.
+        """
+        r1 = self.SMU1.set_output_filter(state)
+        r2 = self.SMU2.set_output_filter(state)
+        return f'{r1}\n{r2}'
+    
+    
     def beep(self, frequency: float, time: float) -> str:
         """Generates a beep sound of the specified frequency and duration.
 

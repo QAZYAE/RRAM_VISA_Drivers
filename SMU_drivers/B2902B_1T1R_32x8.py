@@ -257,7 +257,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         return np.array(sense1), np.array(sense2)
         
         
-    def sense(self, acquire_attempts: int = 500, trigger: bool = False) -> Union[tuple[float, float], str]:
+    def sense(self, acquire_attempts: int = 200, trigger: bool = False) -> Union[tuple[float, float], str]:
         """Read sense data from the instruments. Returns resistance array with resistances
         which haven't been read yet.
         
@@ -299,6 +299,9 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                     self.logger.debug(f'Sense_A: acquire attempt {i}: {sense_data_A}')
                     if sense_data_A is not None:
                         break
+                    if self.need_stop:
+                        self.logger.warning('Sense_A: Need stop flag received!')
+                        break
                     time.sleep(sleep_time)
                 if sense_data_A is None:
                     self.logger.error('Cant obtain sense_A data!')
@@ -313,6 +316,9 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                     if (sense_data_B is not None and
                         len(sense_data_A[0])/3*2 <= len(sense_data_B[0]) and  # At least equal amount of data acquired
                         len(sense_data_A[1])/3*2 <= len(sense_data_B[1])):
+                        break
+                    if self.need_stop:
+                        self.logger.warning('Sense_B: Need stop flag received!')
                         break
                     time.sleep(sleep_time)
                 if sense_data_B is None:
@@ -399,6 +405,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             raise RuntimeError(f'_config_init_values: unknown mode: {mode}')
         self.trigger_count = trigger_count
         self.acquired_counter = 0
+        self.need_stop = False
         self.queue = []
         self.resps = []  # Response list
         # Clearing

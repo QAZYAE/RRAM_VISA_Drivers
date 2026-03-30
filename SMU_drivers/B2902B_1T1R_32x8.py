@@ -72,15 +72,14 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         # Resetting instruments 
         for inst in [self.A, self.B]:
             resps.append(inst.clear())
-            if eval(self.settings['ITC_1T1R']['memory_reset_on_start']):
-                resps.append(inst.memory_reset())
             resps.append(inst.set_standby_zero())
             resps.append(inst.set_output_state('on'))
+            resps.append(inst.set_output_filter('off'))
         # Setting multimeter mode for temperature smu
         resps.append(self.temp_smu.set_multimeter_mode(voltage_compliance=1))
         for smu in [self.A.SMU1, self.A.SMU2, self.gate_smu]:
             resps.append(smu.set_smu_mode('voltage'))
-        # Configuring data output
+        # Configuring data output format
         resps.append(self.A.set_data_format('voltage,current,time'))
         resps.append(self.B.set_data_format('voltage,current'))
         # Configuring triggers: Arm trigger is linked via pin 1 on D-Sub 25 connector
@@ -90,8 +89,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         resps.append(self.B.set_external_trigger_link(pin=1, trigger_layer='arm', function='input', channel=1))
         resps.append(self.A.set_external_trigger_link(pin=2, trigger_layer='trigger', function='output', channel=1))
         resps.append(self.B.set_external_trigger_link(pin=2, trigger_layer='trigger', function='input', channel=1))
-        resps.append(self.A.set_output_filter('off'))
-        resps.append(self.B.set_output_filter('off'))
+        # Checking if errors occurred
         for r in resps:
             if r.startswith('ERROR'):
                 self.logger.error(f'B2902B 1T1R 32x8 driver init error!\n{r}')
@@ -117,7 +115,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         Returns:
             information (str): Technical information.
         """
-        return 'B2902B_1T1R_32x8_driver: uses with two Keysight B2902B Source-Measure ' + \
+        return 'B2902B_1T1R_32x8_driver: uses two Keysight B2902B Source-Measure ' + \
                'modules and a Keysight_34980A Switch unit for measuring 32x8 1T1R ' + \
                'memristive crossbar arrays'
     
@@ -350,7 +348,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                 # sense_gate = sense2_B
                 sense_temp = sense1_B
             V_temp = sense_temp[0:len(R)*2:2]
-            Temp = K_volt2temp(V_temp, room_temp=float(self.settings['ITC_1T1R']['room_temperature']))
+            Temp = K_volt2temp(V_temp, room_temp=float(self.settings['temperature']['room_temperature']))
             self.logger.debug(f'Sense_data acquired: V = {V}, curr = {Curr}, R = {R}, Time={timestamp}, V_temp={V_temp}, Temp={Temp}')
             for r, t, v, cur, tem, v_t in zip(R, timestamp, V, Curr, Temp, V_temp):
                 self.queue.append((r, t, v, cur, tem, v_t))

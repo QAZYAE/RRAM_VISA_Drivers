@@ -83,7 +83,7 @@ class ITC_1T1R_32x8_switched(B2902B_1T1R_32x8_driver):
         Returns:
             information (str): Technical information.
         """
-        return 'CID_1T1R_32x8_driver: uses with two Keysight B2902B Source-Measure ' + \
+        return 'CID_1T1R_32x8_driver: uses two Keysight B2902B Source-Measure ' + \
                'modules and a Keysight_34980A Switch unit for measuring 32x8 1T1R ' + \
                'memristive crossbar arrays'
                

@@ -25,10 +25,13 @@ GATE_VOLTAGE = 3.3  # Voltage applied to transistor gate
 class B2902B_1T1R_32x8_driver(GeneralDriver):
     """Driver for measuring 1T1R 32x8 crossbar arrays
     """
+    # TODO move all descriptions to documentation, use _ for internal attributes
     trigger_interval: float = 100e-6  # Interval between triggers in seconds
     trigger_count: int = 0  # Trigger count for current experiment
     acquired_counter: int = 0  # Number of resistances acquired via sense(). Resets on config or clear
     read_side: int = 1  # SMU to read current from when using .sense(): 1 or 2.
+    need_stop: bool = False  # Flag that can be set to True for GUI. Used if the driver is stuck in 
+                             # acquire loop and user wants to stop the experiment.
     queue: list = []
     sim: str = False  # True for simulation mode
     
@@ -229,13 +232,13 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             self.B.get_errors()
             resps.append(self.A.set_output_state('on'))
             resps.append(self.B.set_output_state('on'))
-            self.logger.info('Panic resolved!')
+            self.logger.critical('Panic resolved!')
         else:
             self.logger.error('Panic was not resolved!\n\t' + '\n\t'.join(resps))
         return flag, '\n'.join(resps)
     
     
-    def _random_sense(self, include_time: bool = True) -> tuple[np.ndarray]:
+    def _random_sense(self, include_time: bool = True) -> tuple[np.ndarray]:  # TODO move to GeneralDriver
         """Generates random sense samples in format (Voltage, Current) with size=acquired_counter+1
             (Size is the number of (Voltage, Current) pairs)
             
@@ -256,8 +259,8 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         
         
     def sense(self, acquire_attempts: int = 200, trigger: bool = False) -> Union[tuple[float, float], str]:
-        """Read sense data from the instruments. Returns resistance array with resistances
-        which haven't been read yet.
+        """Read sense data from the instruments. Updates the result queue and returns a 
+            result from the queue.
         
         Args:
             acquire_attempts (int, optional): Number of attempts to communicate with the instrument
@@ -365,22 +368,28 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             return 'Sense queue is empty!'
         
         
-    def trigger(self) -> None:
-        """Send immediate trigger, skip one acquire value"""
+    def trigger(self) -> tuple[bool, str]:
+        """Send immediate trigger, skip one acquire value
+        
+        Returns:
+            flag, response (tuple[bool, str]): flag is True if the trigger was 
+            sent successfully, response or error.
+        """
         self.logger.debug(f'.trigger() TRIGGER INSTRUMENT STATUS: A: {self.A.check_trigger_status()}, B: {self.B.check_trigger_status()}')
         flag, resp = self.B.check_armed()  # Check if B is ready for trigger
         if not flag:
             self.logger.error(f'.trigger(): B is not armed! B status: {resp}')
-            raise f'.trigger(): B is not armed! B status: {resp}'
+            return False, f'.trigger(): B is not armed! B status: {resp}'
         resp = self.A.trigger()  # Trigger A
         if resp.startswith('ERROR'):
             self.logger.error(f'.sense(): A trigger error: {resp}')
-            return f'.sense(): A trigger error: {resp}'
+            return False, f'.sense(): A trigger error: {resp}'
         self.logger.debug('.trigger(): trigger sent to instrument A')
         self.acquired_counter += 1
+        return True, 'Trigger was sent to the instruments'
         
         
-    def _set_init_values(self, mode, trigger_count, trigger_interval = None, pulse_width = None) -> None:
+    def _set_init_values(self, mode, trigger_count, trigger_interval = None, pulse_width = None) -> None:  # TODO move to GeneralDriver (?)
         """Set initial values for the experiment configuration"""
         if mode == 'DC':
             if trigger_interval < 100e-6:
@@ -413,7 +422,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         self.resps.append(self.B.wait_for_idle(wait_interval=0.1*self.trigger_interval))
         
         
-    def _check_config_and_start(self, mode_name: str, arm_B: bool = False) -> tuple[bool, str]:
+    def _check_config_and_start(self, mode_name: str, arm_B: bool = False) -> tuple[bool, str]:  # TODO move to GeneralDriver (?)
         """Check if the instrument was configured without errors"""
         response = ''
         bad_config_flag = False
@@ -424,7 +433,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         for inst, name in zip([self.A, self.B], ['B2902B_A', 'B2902B_B']):
             err = inst.get_errors()
             if err is not None:
-                response += '\n\t'.join([name, response] + err)
+                response += '\n\t'.join([name] + err)
                 bad_config_flag = True
         if bad_config_flag:
             self.logger.error(response)
@@ -530,7 +539,6 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             sign (int, optional): Side where switch voltage is applied: 1 -- 'BL', 
                 0 -- 'NL'. Defaults to 1.
 
-
         Returns:
             flag, response, resistance (bool, str, float): config_flag (True if configured 
             successfully), instrument_response (error if occurred), Resistance read by the read pulse.
@@ -631,7 +639,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                 else:
                     smu1_seq.append(0)
                     smu2_seq.append(pulse)
-        self.resps.append(self.A.SMU1.set_list_voltage(smu1_seq, current_compliance=current_compliance))
+        self.resps.append(self.A.SMU1.set_list_voltage(smu1_seq, current_compliance=current_compliance))  # TODO apply BL and NL settings
         self.resps.append(self.A.SMU2.set_list_voltage(smu2_seq, current_compliance=current_compliance))
         self.resps.append(self.gate_smu.set_constant_voltage(voltage=GATE_VOLTAGE, current_compliance=1e-6))
         self.resps.append(self.gate_smu.set_base_voltage_immediate(voltage=GATE_VOLTAGE, current_compliance=1e-6))
@@ -681,16 +689,10 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         for smu in [self.A.SMU1, self.A.SMU2]:
             self.resps.append(smu.set_source_shape('pulse'))
             self.resps.append(smu.set_pulse_config(width=self.pulse_width))
-        if sign:
-            read_smu = self.A.SMU1
-            zero_smu = self.A.SMU2
-            self.read_side = 1
-        else:
-            zero_smu = self.A.SMU1
-            read_smu = self.A.SMU2
-            self.read_side = 2
-        self.resps.append(read_smu.set_list_voltage([read_voltage] * n_pulses, current_compliance=current_compliance))
-        self.resps.append(zero_smu.set_list_voltage([0] * n_pulses, current_compliance=current_compliance))
+        # Voltage config
+        self.read_side = 1  # Read on reset
+        self.resps.append(self.A.SMU1.set_list_voltage([read_voltage] * n_pulses, current_compliance=current_compliance))  # TODO apply BL and NL settings
+        self.resps.append(self.A.SMU1.set_list_voltage([0] * n_pulses, current_compliance=current_compliance))
         self.resps.append(self.gate_smu.set_constant_voltage(voltage=GATE_VOLTAGE, current_compliance=1e-6))
         self.resps.append(self.gate_smu.set_base_voltage_immediate(voltage=GATE_VOLTAGE, current_compliance=1e-6))
         return self._check_config_and_start('SMU_pulsed_retention')

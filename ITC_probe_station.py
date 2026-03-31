@@ -300,7 +300,7 @@ class ITC_probe_station(GeneralDriver):
                 sense_temp = sense1
             V = sense_mem[0::3]
             Curr = sense_mem[1::3]
-            timestamp = self.exp_start_time + sense_mem[2:3]
+            timestamp = self.exp_start_time + sense_mem[2::3]
             R = np.abs(V / Curr)
             # Temperature
             V_temp = sense_temp[0::3]
@@ -308,7 +308,7 @@ class ITC_probe_station(GeneralDriver):
             self.logger.debug(f'Sense_data acquired: V = {V}, curr = {Curr}, R = {R}, Time={timestamp}, V_temp={V_temp}, Temp={Temp}')
             for r, t, v, cur, tem, v_t in zip(R, timestamp, V, Curr, Temp, V_temp):
                 self.queue.append((r, t, v, cur, tem, v_t))
-            self.acquired_counter += len(R)
+            self.acquired_counter += min(len(R), len(Temp))
         try:
             self.logger.debug(f'ACQUIRED COUNTER (AFT): {self.acquired_counter}')
             data_to_send = self.queue.pop(0)
@@ -316,8 +316,8 @@ class ITC_probe_station(GeneralDriver):
             self.logger.warning(f'Temperature: {data_to_send[4]} C')
             print(f'Temperature: {data_to_send[4]} C')
             return data_to_send  # Tuple[R, time, v, cur, Temp, V_temp]
-        except IndexError:
-            self.logger.error('Sense queue is empty!')
+        except IndexError as e:
+            self.logger.error(f'Sense queue is empty! Error: {e}')
             return 'Sense queue is empty!'
         
         

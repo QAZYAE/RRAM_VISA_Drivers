@@ -261,17 +261,10 @@ class ITC_probe_station(GeneralDriver):
             else:
                 # Trigger
                 if trigger:
-                    self.logger.debug(f'SENSE TRIGGER INSTRUMENT STATUS: A: {self.A.check_trigger_status()}')
-                    flag, resp = self.A.check_armed()
+                    self.logger.debug('SENSE TRIGGER')
+                    flag, response = self.trigger(skip_acquire=False)
                     if not flag:
-                        self.logger.error(f'.sense(): A is not armed! A status: {resp}')
-                        return f'.sense(): A is not armed! A status: {resp}'
-                    resp = self.A.trigger()  # Trigger A
-                    if resp.startswith('ERROR'):
-                        self.logger.error(f'.sense(): A trigger error: {resp}')
-                        return f'.sense(): A trigger error: {resp}'
-                    else:
-                        self.logger.debug('Sense: Trigger sent to instrument A')
+                        return response
                 # ACQUIRE
                 for i in range(acquire_attempts):
                     sense_data_A = self.A.get_sense_data(offset=self.acquired_counter)  # sense_ch1, sense_ch2
@@ -321,7 +314,7 @@ class ITC_probe_station(GeneralDriver):
             return 'Sense queue is empty!'
         
         
-    def trigger(self) -> tuple[bool, str]:
+    def trigger(self, skip_acquire: bool = True, attempts: int = 200, sleep_time: float = 0.001) -> tuple[bool, str]:
         """Send immediate trigger, skip one acquire value
         
         Returns:
@@ -329,16 +322,23 @@ class ITC_probe_station(GeneralDriver):
             sent successfully, response or error.
         """
         self.logger.debug(f'.trigger() TRIGGER INSTRUMENT STATUS: A: {self.A.check_trigger_status()}')
-        flag, resp = self.A.check_armed()  # Check if B is ready for trigger
+        for i in range(attempts):
+            flag, resp = self.A.check_armed()  # Check if A is ready for trigger
+            if not flag:
+                self.logger.debug(f'.trigger(): Attempt {i}: A is not armed! A status: {resp}')
+            else:
+                break
+            time.sleep(sleep_time)
         if not flag:
-            self.logger.error(f'.trigger(): A is not armed! A status: {resp}')
+            self.logger.error(f'.trigger(): A is not armed in {attempts} attempts! A status: {resp}')
             return False, f'.trigger(): A is not armed! A status: {resp}'
         resp = self.A.trigger()  # Trigger A
         if resp.startswith('ERROR'):
             self.logger.error(f'.sense(): A trigger error: {resp}')
             return False, f'.sense(): A trigger error: {resp}'
         self.logger.debug('.trigger(): trigger sent to instrument A')
-        self.acquired_counter += 1
+        if skip_acquire:
+            self.acquired_counter += 1
         return True, 'Trigger was sent to the instruments'
     
     

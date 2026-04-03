@@ -3,7 +3,7 @@ Drivers for configuring modules on Keysight 34980A Multifunction Switch/Measure 
 """
 import pyvisa 
 from typing import Union
-from RRAM_VISA_Drivers.VISA_utility import VISA_module, twodig
+from RRAM_VISA_Drivers.core import VISA_module
 
 
 
@@ -46,7 +46,7 @@ class Keysight_34922A_70ch_MUX(VISA_module):
             return 
         if channel < 1 or channel > 70:
             return 'ERROR: wrong channel number. Allowed channel numbers are 1 through 70.'
-        response = self.query(f'route:close? (@{self.slot}0{twodig(channel)})')
+        response = self.query(f'route:close? (@{self.slot}0{channel:02})')
         if response[:10] == 'VISA ERROR':
             return f'ERROR: {response}'
         return bool(int(response[:-1]))
@@ -65,7 +65,7 @@ class Keysight_34922A_70ch_MUX(VISA_module):
             return 
         if channel < 1 or channel > 70:
             return 'ERROR: wrong channel number. Allowed channel numbers are 1 through 70.'
-        return self.write(f'route:close (@{self.slot}0{twodig(channel)})')[0]
+        return self.write(f'route:close (@{self.slot}0{channel:02})')[0]
     
     
     def connect_and_check(self, channel: int) -> str:
@@ -81,8 +81,8 @@ class Keysight_34922A_70ch_MUX(VISA_module):
             return f'Simulation: Channel {channel} in slot {self.slot} is connected.'
         if channel < 1 or channel > 70:
             return 'ERROR: wrong channel number. Allowed channel numbers are 1 through 70.'
-        self.write(f'route:close (@{self.slot}0{twodig(channel)})')
-        connected = bool(int(self.query(f'route:close? (@{self.slot}0{twodig(channel)})')))
+        self.write(f'route:close (@{self.slot}0{channel:02})')
+        connected = bool(int(self.query(f'route:close? (@{self.slot}0{channel:02})')))
         if connected:
             query_response = f'Channel {channel} in slot {self.slot} is connected.'
         else:
@@ -103,8 +103,8 @@ class Keysight_34922A_70ch_MUX(VISA_module):
             return f'Simulation: Channel {channel} in slot {self.slot} is connected exclusively.'
         if channel < 1 or channel > 70:
             return 'ERROR: wrong channel number. Allowed channels are 1 through 70.'
-        self.write(f'route:close:exclusive (@{self.slot}0{twodig(channel)})')
-        connected = bool(int(self.query(f'route:close? (@{self.slot}0{twodig(channel)})')))
+        self.write(f'route:close:exclusive (@{self.slot}0{channel:02})')
+        connected = bool(int(self.query(f'route:close? (@{self.slot}0{channel:02})')))
         if connected:
             query_response = f'Channel {channel} in slot {self.slot} is connected exclusively.'
         else:
@@ -125,7 +125,7 @@ class Keysight_34922A_70ch_MUX(VISA_module):
             return 
         if channel < 1 or channel > 70:
             return 'ERROR: wrong channel number. Allowed channel numbers are 1 through 70.'
-        return self.write(f'route:open (@{self.slot}0{twodig(channel)})')[0]
+        return self.write(f'route:open (@{self.slot}0{channel:02})')[0]
     
     
     def disconnect_and_check(self, channel: int) -> str:
@@ -141,8 +141,8 @@ class Keysight_34922A_70ch_MUX(VISA_module):
             return f'Simulation: Channel {channel} in slot {self.slot} is disconnected.'
         if channel < 1 or channel > 70:
             return 'ERROR: wrong channel number. Allowed channel numbers are 1 through 70.'
-        self.write(f'route:open (@{self.slot}0{twodig(channel)})')[0]
-        connected = bool(int(self.query(f'route:close? (@{self.slot}0{twodig(channel)})')))
+        self.write(f'route:open (@{self.slot}0{channel:02})')[0]
+        connected = bool(int(self.query(f'route:close? (@{self.slot}0{channel:02})')))
         if connected:
             query_response = f'Channel {channel} in slot {self.slot} is connected.'
         else:
@@ -199,7 +199,7 @@ class Keysight_34922A_70ch_MUX(VISA_module):
             channel_str = ''
             for ch, ch_flag in enumerate(connection_list):
                 if ch_flag:
-                    channel_str += f'{self.slot}0{twodig(ch+1)},'
+                    channel_str += f'{self.slot}0{ch+1:02},'
                     result += ' C'
                 else:
                     result += ' D'
@@ -235,7 +235,7 @@ class Keysight_34922A_70ch_MUX(VISA_module):
             channel_str = ''
             for ch, ch_flag in enumerate(connection_list):
                 if ch_flag:
-                    channel_str += f'{self.slot}0{twodig(ch+1)},'
+                    channel_str += f'{self.slot}0{ch+1:02},'
                     result += ' C'
                 else:
                     result += ' D'
@@ -296,7 +296,7 @@ class Keysight_34932A_2x4x16_Matrix(VISA_module):
             return
         if row < 1 or row > 8 or column < 1 or column > 16:
             return 'ERROR: wrong row or column number. Rows are 1 through 8, columns are 1 through 16.'
-        response = self.query(f'route:close? (@{self.slot}{row}{twodig(column)})')
+        response = self.query(f'route:close? (@{self.slot}{row}{column:02})')
         if response[:10] == 'VISA ERROR':
             return f'ERROR: {response}'
         return bool(int(response[:-1]))
@@ -316,7 +316,7 @@ class Keysight_34932A_2x4x16_Matrix(VISA_module):
             return
         if row < 1 or row > 8 or column < 1 or column > 16:
             return 'ERROR: wrong row or column number. Rows are 1 through 8, columns are 1 through 16.'
-        return self.write(f'route:close (@{self.slot}{row}{twodig(column)})')[0]
+        return self.write(f'route:close (@{self.slot}{row}{column:02})')[0]
     
     
     def connect_and_check(self, row: int, column: int) -> str:
@@ -333,8 +333,8 @@ class Keysight_34932A_2x4x16_Matrix(VISA_module):
             return f'Simulation: Row {row} and column {column} intersection in slot {self.slot} is connected.'
         if row < 1 or row > 8 or column < 1 or column > 16:
             return 'ERROR: wrong row or column number. Rows are 1 through 8, columns are 1 through 16.'
-        self.write(f'route:close (@{self.slot}{row}{twodig(column)})')
-        connected = bool(int(self.query(f'route:close? (@{self.slot}{row}{twodig(column)})')))
+        self.write(f'route:close (@{self.slot}{row}{column:02})')
+        connected = bool(int(self.query(f'route:close? (@{self.slot}{row}{column:02})')))
         if connected:
             query_response = f'Row {row} and column {column} intersection in slot {self.slot} is connected'
         else:
@@ -356,7 +356,7 @@ class Keysight_34932A_2x4x16_Matrix(VISA_module):
             return
         if row < 1 or row > 8 or column < 1 or column > 16:
             return 'ERROR: wrong row or column number. Rows are 1 through 8, columns are 1 through 16.'
-        return self.write(f'route:open (@{self.slot}{row}{twodig(column)})')[0]
+        return self.write(f'route:open (@{self.slot}{row}{column:02})')[0]
     
     
     def disconnect_and_check(self, row: int, column: int) -> str:
@@ -374,8 +374,8 @@ class Keysight_34932A_2x4x16_Matrix(VISA_module):
                 'disconnected.'
         if row < 1 or row > 8 or column < 1 or column > 16:
             return 'ERROR: wrong row or column number. Rows are 1 through 8, columns are 1 through 16.'
-        self.write(f'route:open (@{self.slot}{row}{twodig(column)})')
-        connected = bool(int(self.query(f'route:close? (@{self.slot}{row}{twodig(column)})')))
+        self.write(f'route:open (@{self.slot}{row}{column:02})')
+        connected = bool(int(self.query(f'route:close? (@{self.slot}{row}{column:02})')))
         if connected:
             query_response = f'Row {row} and column {column} intersection in slot {self.slot} is connected'
         else:
@@ -465,10 +465,10 @@ class Keysight_34932A_2x4x16_Matrix(VISA_module):
             disconnect_str = ''
             for col, col_flag in enumerate(connection_list):
                 if col_flag:
-                    connect_str += f'{self.slot}{row}{twodig(col+1)},'
+                    connect_str += f'{self.slot}{row}{col+1:02},'
                     result += ' C'
                 else:
-                    disconnect_str += f'{self.slot}{row}{twodig(col+1)},'
+                    disconnect_str += f'{self.slot}{row}{col+1:02},'
                     result += ' D'
             if connect_str != '':
                 self.write(f'route:close (@{connect_str[:-1]})')
@@ -506,10 +506,10 @@ class Keysight_34932A_2x4x16_Matrix(VISA_module):
             disconnect_str = ''
             for col, col_flag in enumerate(connection_list):
                 if col_flag:
-                    connect_str += f'{self.slot}{row}{twodig(col+1)},'
+                    connect_str += f'{self.slot}{row}{col+1:02},'
                     result += ' C'
                 else:
-                    disconnect_str += f'{self.slot}{row}{twodig(col+1)},'
+                    disconnect_str += f'{self.slot}{row}{col+1:02},'
                     result += ' D'
             if connect_str != '':
                 self.write(f'route:close (@{connect_str[:-1]})')

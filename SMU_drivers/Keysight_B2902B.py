@@ -5,7 +5,7 @@ import pyvisa
 import time
 from typing import Union
 import numpy as np
-from RRAM_VISA_Drivers.VISA_utility import VISA_instrument
+from RRAM_VISA_Drivers.core import VISA_instrument
 from RRAM_VISA_Drivers.SMU_drivers.Keysight_SMU import SMU
 
 

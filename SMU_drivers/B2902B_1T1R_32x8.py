@@ -8,9 +8,9 @@ import pyvisa
 import time
 import numpy as np
 from typing import Union
-from RRAM_VISA_Drivers.VISA_utility import GeneralDriver
+from RRAM_VISA_Drivers.core import GeneralDriver
 from RRAM_VISA_Drivers.SMU_drivers import B2902B
-from RRAM_VISA_Drivers.thermocouples import K_volt2temp
+from RRAM_VISA_Drivers.core.temperature import K_volt2temp
 
 
 _sign = {  # Sign dict for applying voltage to BL(reset) and NL(set)

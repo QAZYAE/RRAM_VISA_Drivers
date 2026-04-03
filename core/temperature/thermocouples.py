@@ -2,48 +2,22 @@
 from typing import Union
 import numpy as np
 from collections.abc import Iterable
+import os 
 
 
+# Loading and parsing approximation data
+K_type = np.load(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'K_type_thermocouple.npz'))
 
-# Linear coefficients. V = K_A * T + K_B; Temp_diff from 0 to 200
-K_A = 4.0924692653673157e-05
-K_B = -1.1232901730952569e-05
+# Temp_difference from 0 to 200: Linear coefficients. V = K_A * T + K_B; 
+K_A = K_type['K_A'][0]
+K_B = K_type['K_B'][0]
 
-# Temp_diff < 0
-T2V_negative = np.array([-1.07253621e-10,  2.85350875e-08,  3.94461151e-05, -1.22390279e-06])
-V2T_negative = np.array([
-    -9.864108403581225026e+75,
-    -3.209929389529493345e+74,
-    -3.433092461979424730e+72,
-    -5.899062643487081484e+69,
-    1.060313170809072731e+68,
-    1.197716209067667578e+65,
-    -4.110370497302463466e+63,
-    6.615819100249608936e+60,
-    1.375821465914752219e+59,
-    -7.215280980857030446e+56,
-    -3.022006084551779724e+54,
-    3.910105263820096657e+52,
-    3.895196975252723718e+48,
-    -1.624134520704641092e+48,
-    3.272324392336761420e+45,
-    6.384111672381793162e+43,
-    -1.672533629493745310e+41,
-    -2.868639695453212411e+39,
-    6.180460080648295940e+35,
-    1.284753535191521146e+35,
-    8.591397789963238486e+32,
-    3.101471736827865753e+30,
-    7.252401690397833270e+27,
-    1.157159724278476096e+25,
-    1.271459023697736211e+22,
-    9.466678436155549696e+18,
-    4.588056472587859000e+15,
-    1.345555297193025391e+12,
-    2.086325666643626988e+08,
-    3.832295499144374480e+04,
-    1.141073825635648964e-01
-])
+# Temp_diff < 0: polynomial coefficients
+T2V_negative = K_type['T2V_negative']
+V2T_negative = K_type['V2T_negative']
+
+K_type.close()
+
 
 
 def _K_v2t_pos(volt: float) -> float:

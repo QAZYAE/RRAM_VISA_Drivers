@@ -8,7 +8,7 @@ import pyvisa
 import os
 from RRAM_VISA_Drivers.SMU_drivers import B2902B_1T1R_32x8_driver
 from RRAM_VISA_Drivers.Switch_drivers import Keysight_34980A_1T1R_32x8
-from RRAM_VISA_Drivers.gui_connection import (
+from RRAM_VISA_Drivers.core.gui_connection import (
     set_driver_instruments, 
     check_connection_B2902B,
     check_connection_34980A
@@ -72,7 +72,7 @@ class ITC_1T1R_32x8_switched(B2902B_1T1R_32x8_driver):
         super().__init__(A_res, B_res, self.sim)
         self.switch = Keysight_34980A_1T1R_32x8(  # Controls cell selection in crossbar array
             resource=Switch_res, 
-            config_path=os.path.join(os.getcwd(), 'RRAM_VISA_Drivers', 'config', 'Keysight_34980A_1T1R_32x8.json')
+            config_path=os.path.join(self.drivers_path, 'Switch_drivers', 'config', 'Keysight_34980A_1T1R_32x8.json')
         )
         print('ITC_1T1R_32x8_switched init success')
         

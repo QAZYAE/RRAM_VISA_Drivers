@@ -218,3 +218,5 @@ __marimo__/
 # Other
 resistance_map.npy
 *.log.*
+SMU_test.ipynb
+SMU_test.py

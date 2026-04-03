@@ -5,7 +5,7 @@ import pyvisa
 from typing import Union
 import numpy as np
 from numpy.typing import ArrayLike
-from RRAM_VISA_Drivers.VISA_utility import VISA_module
+from RRAM_VISA_Drivers.core import VISA_module
 
 
 class SMU(VISA_module):

@@ -15,7 +15,8 @@ class GeneralDriver:
         """
         General driver class which implements logging functionality.
         """
-        self.drivers_path = os.path.dirname(os.path.realpath(__file__))
+        # RRAM_VISA_Drivers path
+        self.drivers_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
         # Settings
         self.settings = ConfigParser()
         self.update_settings()

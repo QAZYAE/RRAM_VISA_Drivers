@@ -52,3 +52,10 @@ class GeneralDriver:
         
     def set_logging_level(self, level: str) -> None:
         self.logger.setLevel(level.rstrip().upper())
+        
+        
+    def stop_experiment(self) -> None:
+        """
+        General method, raises need_stop to True. Can be overwritten.
+        """
+        self.need_stop = True

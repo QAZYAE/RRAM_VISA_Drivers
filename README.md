@@ -1,0 +1,1 @@
+A set of python drivers (unofficial) for conducting experiments on memristors and memristive crossbar arrays via VISA instruments. Designed for [Memriboard](https://github.com/neurocomputer/MemriBoard) app.

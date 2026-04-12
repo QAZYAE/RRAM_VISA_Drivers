@@ -51,6 +51,11 @@ class GeneralDriver:
         
         
     def set_logging_level(self, level: str) -> None:
+        """Set driver's logger level.
+
+        Args:
+            level (str): Logging level: debug | info | warning | error | critical.
+        """
         self.logger.setLevel(level.rstrip().upper())
         
         
@@ -59,3 +64,21 @@ class GeneralDriver:
         General method, raises need_stop to True. Can be overwritten.
         """
         self.need_stop = True
+        
+        
+    def terminal_command(self, command: str) -> str:
+        """Execute `self.command` in the driver class and get the response as a str.
+        For example, to write an SCPI command to the instrument that is labeled `A` in
+        the driver, send `A.write('SCPI_command')` command.
+
+        Args:
+            command (str): command to the driver.
+
+        Returns:
+            str: Driver's response.
+        """
+        try:
+            response = str(eval('self.' + command))
+        except Exception as e:
+            response = f'ERROR: {type(e).__name__}: {e}'
+        return response

@@ -128,6 +128,7 @@ class ITC_probe_station(GeneralDriver):
         if resp.startswith('ERROR'):
             self.logger.critical(f'Could not clear the instruments!\n\t{resp}')
             return False
+        self.logger.info('Instruments were cleared')
         return True
     
     
@@ -160,6 +161,7 @@ class ITC_probe_station(GeneralDriver):
             if r.startswith('ERROR'):
                 self.logger.critical(f'Could not disconnect the instruments!\n\t{r}')
                 return False, r
+        self.logger.info('VISA-instruments were disconnected')
         return True, 'VISA-instruments were disconnected'
     
     
@@ -172,6 +174,7 @@ class ITC_probe_station(GeneralDriver):
         """
         flag = self.clear_instruments()
         if flag:
+            self.logger.info('VISA-instruments are in standby mode')
             return True, 'Instruments are in standby mode'
         return False, 'Could not clear the instruments'
     

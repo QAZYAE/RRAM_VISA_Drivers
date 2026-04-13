@@ -603,3 +603,52 @@ class ITC_probe_station(GeneralDriver):
         # Voltage config
         self.resps.append(self.mem_smu.set_list_voltage([-float(read_voltage)] * n_pulses, current_compliance=current_compliance))
         return self._check_config_and_start('SMU_pulsed_retention')
+    
+    
+    def config_endurance(
+        self,
+        v_dir: float,
+        v_rev: float,
+        read_voltage: Union[float, str],
+        n_cycles: int,
+        dir_cc: float,
+        rev_cc: float,
+        pulse_width: float,
+        trigger_interval: Union[float, None] = None
+    ) -> tuple[bool, str]:
+        """Configure endurance mode. WARNING: Method doesn't connect the crossbar cell, 
+        it should be connected via .connect_cell() method.
+
+        Args:
+            v_dir (float): Direct voltage in Volts (set).
+            v_rev (float): Reverse voltage in Volts (reset).
+            read_voltage (Union[float, str]): Read voltage (reads on reset).
+            n_cycles (int): Number of endurance cycles.
+            dir_cc (float): Direct current compliance in Amperes (set).
+            rev_cc (float): Reverse current compliance in Amperes (reset).
+            pulse_width (float): Pulse width (seconds).
+            trigger_interval (Union[float, None]): Trigger interval, seconds (5 * pulse_width if None). Defaults to None.
+
+        Returns:
+            tuple[bool, str]: Good_config_flag (True if instruments were
+            successfully configured), response or error.
+        """
+        self._set_init_values(mode='pulse', trigger_count=4*n_cycles,
+                              pulse_width=pulse_width, trigger_interval=trigger_interval)
+        # Configuring triggers and source shapes
+        for smu in [self.A.SMU1, self.A.SMU2]:
+            self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
+                                               acquire_delay=0.3*self.pulse_width))
+            self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.pulse_width))
+        self.resps.append(self.temp_smu.set_source_shape('DC'))
+        # Pulse mode for BL and NL
+        self.resps.append(self.mem_smu.set_source_shape('pulse'))
+        self.resps.append(self.mem_smu.set_pulse_config(width=self.pulse_width))
+        # Voltage config
+        voltage_list = [abs(float(v_dir)), -abs(float(read_voltage)), -abs(float(v_rev)), -abs(float(read_voltage))] * n_cycles
+        self.resps.append(self.mem_smu.set_list_voltage(voltage_list=voltage_list, current_compliance=dir_cc))  
+        # FIXME this should be parsed to positive and negative compliance levels.
+        # :SENSe:<CURRent[:DC]|VOLTage[:DC]>:PROTection[:LEVel]:NEGative
+        # :SENSe:<CURRent[:DC]|VOLTage[:DC]>:PROTection[:LEVel]:POSitive
+        # TODO check if the way we set the compliance level actually works (Add :pulse ?)
+        return self._check_config_and_start('SMU_endurance')

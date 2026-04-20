@@ -23,14 +23,21 @@ set_driver_instruments(
 
 
 class ITC_probe_station(GeneralDriver):
-    """Driver for measuring measuring memristors using one channel of the B2902B
+    """Driver for measuring measuring memristors using one channel of the B2902B.
+    
+    Attributes:
+        trigger_interval (float): Interval between triggers in seconds.
+        trigger_count (int): Trigger count for current experiment.
+        acquired_counter (int): Number of resistances acquired via sense(). Resets on config or clear.
+        need_stop (bool): Flag that can be set to True for GUI. Used if the driver is stuck in
+            acquire loop and user wants to stop the experiment.
+        queue (list): Results queue that fills while reading the data from instruments.
+        sim (str): True for simulation mode.
     """
-    # TODO move all descriptions to documentation, use _ for internal attributes
-    trigger_interval: float = 100e-6  # Interval between triggers in seconds
-    trigger_count: int = 0  # Trigger count for current experiment
-    acquired_counter: int = 0  # Number of resistances acquired via sense(). Resets on config or clear
-    need_stop: bool = False  # Flag that can be set to True for GUI. Used if the driver is stuck in 
-                             # acquire loop and user wants to stop the experiment.
+    trigger_interval: float = 100e-6
+    trigger_count: int = 0
+    acquired_counter: int = 0
+    need_stop: bool = False
     queue: list = []
     sim: str = False
     

@@ -13,7 +13,7 @@ from RRAM_VISA_Drivers.SMU_drivers import B2902B
 from RRAM_VISA_Drivers.core.temperature import K_volt2temp
 
 
-_sign = {  # Sign dict for applying voltage to BL(reset) and NL(set)
+_sign = {  # Sign dict for applying voltage to BL(reset) and NL(set) in MemriBoard
     1: 'BL',
     0: 'NL'
 }
@@ -23,17 +23,25 @@ GATE_VOLTAGE = 3.3  # Voltage applied to transistor gate
 
 
 class B2902B_1T1R_32x8_driver(GeneralDriver):
-    """Driver for measuring 1T1R 32x8 crossbar arrays
+    """Driver for measuring 1T1R 32x8 crossbar arrays.
+    
+    Attributes: 
+        trigger_interval (float): Interval between triggers in seconds. Defaults to 100 us.
+        trigger_count (int): Trigger count for current experiment.
+        acquired_counter (int): Number of resistances acquired via sense(). Resets on config or clear.
+        read_side (int): SMU to read current from when using .sense(): 1 for BL, or 2 for NL.
+        need_stop (bool): Flag that can be set to True for GUI. Used if the driver is stuck in 
+            acquire loop and user wants to stop the experiment.
+        queue (list): Results queue that fills while reading the data from instruments.
+        sim (str): True for simulation mode.
     """
-    # TODO move all descriptions to documentation, use _ for internal attributes
-    trigger_interval: float = 100e-6  # Interval between triggers in seconds
-    trigger_count: int = 0  # Trigger count for current experiment
-    acquired_counter: int = 0  # Number of resistances acquired via sense(). Resets on config or clear
-    read_side: int = 1  # SMU to read current from when using .sense(): 1 or 2.
-    need_stop: bool = False  # Flag that can be set to True for GUI. Used if the driver is stuck in 
-                             # acquire loop and user wants to stop the experiment.
+    trigger_interval: float = 100e-6
+    trigger_count: int = 0
+    acquired_counter: int = 0
+    read_side: int = 1
+    need_stop: bool = False
     queue: list = []
-    sim: str = False  # True for simulation mode
+    sim: str = False
     
     def __init__(
         self, 
@@ -66,9 +74,17 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         if self.settings['ITC_1T1R']['BL_channel'] == '1':
             self.BL_smu = self.A.SMU1
             self.NL_smu = self.B.SMU2
+            self._read_sides = {
+                1: 1,  # BL -> SMU1
+                2: 2
+            }
         else:
             self.BL_smu = self.A.SMU2
             self.NL_smu = self.B.SMU1
+            self._read_sides = {
+                1: 2,  # BL -> SMU2
+                2: 1
+            }
         # Checking connections and instrument types
         for inst, name in zip([self.A, self.B], 
                               ['B2902B_A', 'B2902B_B']):
@@ -343,9 +359,9 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                 # TODO Save WL data
             # PARSING DATA
             # B data might be longer than A data
-            if self.read_side == 1:
+            if self._read_sides[self.read_side] == 1:
                 primary_sense = sense1
-            elif self.read_side == 2:
+            else:
                 primary_sense = sense2
             V = primary_sense[0::3]
             Curr = primary_sense[1::3]
@@ -648,7 +664,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                 else:
                     BL_seq.append(0)
                     NL_seq.append(pulse)
-        self.resps.append(self.BL_smu.set_list_voltage(BL_seq, current_compliance=current_compliance))  # TODO apply BL and NL settings
+        self.resps.append(self.BL_smu.set_list_voltage(BL_seq, current_compliance=current_compliance))
         self.resps.append(self.NL_smu.set_list_voltage(NL_seq, current_compliance=current_compliance))
         self.resps.append(self.gate_smu.set_constant_voltage(voltage=GATE_VOLTAGE, current_compliance=1e-6))
         self.resps.append(self.gate_smu.set_base_voltage_immediate(voltage=GATE_VOLTAGE, current_compliance=1e-6))
@@ -700,7 +716,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             self.resps.append(smu.set_pulse_config(width=self.pulse_width))
         # Voltage config
         self.read_side = 1  # Read on reset
-        self.resps.append(self.BL_smu.set_list_voltage([read_voltage] * n_pulses, current_compliance=current_compliance))  # TODO apply BL and NL settings
+        self.resps.append(self.BL_smu.set_list_voltage([read_voltage] * n_pulses, current_compliance=current_compliance))
         self.resps.append(self.NL_smu.set_list_voltage([0] * n_pulses, current_compliance=current_compliance))
         self.resps.append(self.gate_smu.set_constant_voltage(voltage=GATE_VOLTAGE, current_compliance=1e-6))
         self.resps.append(self.gate_smu.set_base_voltage_immediate(voltage=GATE_VOLTAGE, current_compliance=1e-6))

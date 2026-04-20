@@ -646,9 +646,8 @@ class ITC_probe_station(GeneralDriver):
         self.resps.append(self.mem_smu.set_pulse_config(width=self.pulse_width))
         # Voltage config
         voltage_list = [abs(float(v_dir)), -abs(float(read_voltage)), -abs(float(v_rev)), -abs(float(read_voltage))] * n_cycles
-        self.resps.append(self.mem_smu.set_list_voltage(voltage_list=voltage_list, current_compliance=dir_cc))  
-        # FIXME this should be parsed to positive and negative compliance levels.
-        # :SENSe:<CURRent[:DC]|VOLTage[:DC]>:PROTection[:LEVel]:NEGative
-        # :SENSe:<CURRent[:DC]|VOLTage[:DC]>:PROTection[:LEVel]:POSitive
+        self.resps.append(self.mem_smu.set_list_voltage(voltage_list=voltage_list, 
+                                                        current_compliance=dir_cc,
+                                                        negative_current_compliance=rev_cc))
         # TODO check if the way we set the compliance level actually works (Add :pulse ?)
         return self._check_config_and_start('SMU_endurance')

@@ -146,7 +146,8 @@ class SMU(VISA_module):
     def set_constant_voltage(
         self,
         voltage: float,
-        current_compliance: float = 300e-6
+        current_compliance: float = 300e-6,
+        negative_current_compliance: Union[float, None] = None
     ) -> str:
         """Set constant voltage mode for triggered measurements.
 
@@ -154,15 +155,20 @@ class SMU(VISA_module):
             voltage (float): Constant voltage level (source), Volts
             current_compliance (float, optional): Current compliance level, Amperes. 
                 Defaults to 300 uA.
+            negative_current_compliance: (float | None, optional): Current compiance level for negative currents,
+                Amperes. If this argument is None, `current compliance` is applied for both sides. If 
+                `negative_current_compliance` is specified, `current_compliance` is applied for positive current,
+                `negative_current_compliance` is applied for negative currents. Defauts to None.
 
         Returns:
             response (str): Command response | error if an error occurred.
         """
+        compliance_commands, cc_response = self._parse_current_compliance(current_compliance, negative_current_compliance)
         return self.write_resp(
             ';:'.join([f'source{self.ch}:voltage:mode fix',
                        f'source{self.ch}:voltage:level:triggered:amplitude {voltage}',
-                       f'sense{self.ch}:current:DC:protection:level {current_compliance}']),
-            f'Constant voltage is configured: {voltage} V, CC = {current_compliance} A'
+                       *compliance_commands]),
+            f'Constant voltage is configured: {voltage} V, {cc_response}'
         )
         
         
@@ -172,7 +178,8 @@ class SMU(VISA_module):
         n_points: int, 
         start: float = 0,
         double: bool = True, 
-        current_compliance: float = 300e-6
+        current_compliance: float = 300e-6,
+        negative_current_compliance: Union[float, None] = None
     ) -> str:
         """Set sweep voltage mode for triggered measurements
 
@@ -184,11 +191,16 @@ class SMU(VISA_module):
             double (bool, optional): if True, sets sweep mode to double sweep. Double sweep 
                 performs the sweep from start to stop to start. Defaults to False.
             current_compliance (float, optional): Current compliance level, Amperes. Defaults to 300 uA.
+            negative_current_compliance: (float | None, optional): Current compiance level for negative currents,
+                Amperes. If this argument is None, `current compliance` is applied for both sides. If 
+                `negative_current_compliance` is specified, `current_compliance` is applied for positive current,
+                `negative_current_compliance` is applied for negative currents. Defauts to None.
 
         Returns:
             response (str): Command response | error if an error occurred.
         """
         dir_mode = 'double' if double else 'single'
+        compliance_commands, cc_response = self._parse_current_compliance(current_compliance, negative_current_compliance)
         return self.write_resp(
             ';:'.join([f'source{self.ch}:voltage:mode sweep',
                        f'source{self.ch}:sweep:direction up',
@@ -197,18 +209,27 @@ class SMU(VISA_module):
                        f'source{self.ch}:voltage:stop {stop}',
                        f'source{self.ch}:sweep:points {n_points}',
                        f'source{self.ch}:sweep:stair {dir_mode}',
-                       f'sense{self.ch}:current:DC:protection:level {current_compliance}']),
+                       *compliance_commands]),
             f'Sweep voltage is configured: From {start} V to {stop} V,' + \
-                f' {n_points} points, {dir_mode} sweep, CC = {current_compliance} A'
+                f' {n_points} points, {dir_mode} sweep, {cc_response}'
         )
         
         
-    def set_list_voltage(self, voltage_list: ArrayLike, current_compliance: float = 300e-6) -> str:
+    def set_list_voltage(
+        self, 
+        voltage_list: ArrayLike,
+        current_compliance: float = 300e-6,
+        negative_current_compliance: Union[float, None] = None
+    ) -> str:
         """Set list voltage mode for triggered measurements.
 
         Args:
             voltage_list (ArrayLike): List of voltages for SMU to apply.
             current_compliance (float, optional): Current compliance level, Amperes. Defaults to 300 uA.
+            negative_current_compliance: (float | None, optional): Current compiance level for negative currents,
+                Amperes. If this argument is None, `current compliance` is applied for both sides. If 
+                `negative_current_compliance` is specified, `current_compliance` is applied for positive current,
+                `negative_current_compliance` is applied for negative currents. Defauts to None.
 
         Returns:
             response (str): Command response | error if an error occurred.
@@ -217,30 +238,41 @@ class SMU(VISA_module):
             voltage_str = ','.join(map(str, voltage_list))
         except Exception as e:
             return f'ERROR: {self.resp} could not convert voltage list to a str: {e}'
+        compliance_commands, cc_response = self._parse_current_compliance(current_compliance, negative_current_compliance)
         return self.write_resp(
             ';:'.join([f'source{self.ch}:voltage:mode list',
                        f'source{self.ch}:list:voltage {voltage_str}',
-                       f'sense{self.ch}:current:DC:protection:level {current_compliance}']),
-            f'List voltage is configured: CC = {current_compliance} A, Voltages (V): {voltage_list}'
+                       *compliance_commands]),
+            f'List voltage is configured: {cc_response}, Voltages (V): {voltage_list}'
         )
         
         
-    def set_base_voltage_immediate(self, voltage, current_compliance: float = 100e-3) -> str:
+    def set_base_voltage_immediate(
+        self, 
+        voltage, 
+        current_compliance: float = 100e-3, 
+        negative_current_compliance: Union[float, None] = None
+    ) -> str:
         """Set base voltage output, applied immediately. WARNING: Voltage is applied on receiving command,
             not on trigger. Voltage will not turn off after measurements are done, 
             it should be set to 0 via this method.
 
         Args:
             voltage (float): Base voltage (source), Volts.
-            current_compliance (float, optional): Current compliance level, Amperes. Defaults to 300 uA.
+            current_compliance (float, optional): Current compliance level, Amperes. Defaults to 100 mA.
+            negative_current_compliance: (float | None, optional): Current compiance level for negative currents,
+                Amperes. If this argument is None, `current compliance` is applied for both sides. If 
+                `negative_current_compliance` is specified, `current_compliance` is applied for positive current,
+                `negative_current_compliance` is applied for negative currents. Defauts to None.
 
         Returns:
             response (str): Command response | error if an error occurred.
         """
+        compliance_commands, cc_response = self._parse_current_compliance(current_compliance, negative_current_compliance)
         return self.write_resp(
-            ';:'.join([f'sense{self.ch}:current:DC:protection:level {current_compliance}',
+            ';:'.join([*compliance_commands,
                        f'source{self.ch}:voltage:level:immediate {voltage}']),
-            f'Base voltage is set to {voltage}.'
+            f'Base voltage is set to {voltage}; {cc_response}.'
         )
         
         
@@ -613,17 +645,29 @@ class SMU(VISA_module):
             config['n_points'] = int(self.query(f':source{self.ch}:sweep:points?'))
             config['current_compliance'] = float(self.query((f':sense{self.ch}:current:DC:'
                                                              'protection:level?')))
+            config['positive_compliance'] = float(self.query((f':sense{self.ch}:current:DC:'
+                                                             'protection:level:positive?')))
+            config['negative_compliance'] = float(self.query((f':sense{self.ch}:current:DC:'
+                                                             'protection:level:negative?')))
         elif mode_resp[:3] == 'FIX':
             config['mode'] = 'constant voltage'
             config['voltage'] = float(self.query(f':source{self.ch}:voltage:level:triggered:amplitude?'))
             config['current_compliance'] = float(self.query(f':sense{self.ch}:current:DC:'
                                                              'protection:level?'))
+            config['positive_compliance'] = float(self.query((f':sense{self.ch}:current:DC:'
+                                                             'protection:level:positive?')))
+            config['negative_compliance'] = float(self.query((f':sense{self.ch}:current:DC:'
+                                                             'protection:level:negative?')))
         elif mode_resp[:3] == 'LIS':
             config['mode'] = 'list'
             config['current_compliance'] = float(self.query(f':sense{self.ch}:current:DC:'
                                                              'protection:level?'))
             config['voltage_list'] = np.array(self.query(f'source{self.ch}:list:voltage?').split(','), 
                                               dtype=float)
+            config['positive_compliance'] = float(self.query((f':sense{self.ch}:current:DC:'
+                                                             'protection:level:positive?')))
+            config['negative_compliance'] = float(self.query((f':sense{self.ch}:current:DC:'
+                                                             'protection:level:negative?')))
         else:
             config['mode'] = mode_resp[:-1]
         shape_resp = self.query(f'source{self.ch}:function:shape?')
@@ -704,3 +748,18 @@ class SMU(VISA_module):
         acq_config = get_config('acquire')
         tran_config = get_config('transient')
         return acq_config, tran_config
+    
+    # ----------------
+    # Internal helpers
+    # ----------------
+    
+    def _parse_current_compliance(self, current_compliance: float, negative_current_compliance: Union[float, None]) -> tuple[list, str]:
+        """_internal_function_: parse positive and negative current compliance to form a command list"""
+        if negative_current_compliance is None:
+            compliance_commands = [f'sense{self.ch}:current:DC:protection:level {current_compliance}']
+            cc_response = f'CC = {current_compliance} A'
+        else:
+            compliance_commands = [f'sense{self.ch}:current:DC:protection:level:positive {current_compliance}',
+                                    f'sense{self.ch}:current:DC:protection:level:negative {negative_current_compliance}']
+            cc_response = f'Positive CC = {current_compliance} A, Negative CC = {negative_current_compliance} A'
+        return compliance_commands, cc_response

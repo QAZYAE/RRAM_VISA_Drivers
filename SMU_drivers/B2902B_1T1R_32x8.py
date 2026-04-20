@@ -86,12 +86,14 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         resps.append(self.A.set_data_format('voltage,current,time'))
         resps.append(self.B.set_data_format('voltage,current'))
         # Configuring triggers: Arm trigger is linked via pin 1 on D-Sub 25 connector
+        self.arm_link_pin = int(self.settings['ITC_1T1R']['Arm_link_pin'])
+        self.trigger_link_pin = int(self.settings['ITC_1T1R']['Trigger_link_pin'])
         resps.append(self.A.SMU1.set_arm_BUS())
         resps.append(self.A.SMU2.set_arm_BUS())
-        resps.append(self.A.set_external_trigger_link(pin=1, trigger_layer='arm', function='output', channel=1))
-        resps.append(self.B.set_external_trigger_link(pin=1, trigger_layer='arm', function='input', channel=1))
-        resps.append(self.A.set_external_trigger_link(pin=2, trigger_layer='trigger', function='output', channel=1))
-        resps.append(self.B.set_external_trigger_link(pin=2, trigger_layer='trigger', function='input', channel=1))
+        resps.append(self.A.set_external_trigger_link(pin=self.arm_link_pin, trigger_layer='arm', function='output', channel=1))
+        resps.append(self.B.set_external_trigger_link(pin=self.arm_link_pin, trigger_layer='arm', function='input', channel=1))
+        resps.append(self.A.set_external_trigger_link(pin=self.trigger_link_pin, trigger_layer='trigger', function='output', channel=1))
+        resps.append(self.B.set_external_trigger_link(pin=self.trigger_link_pin, trigger_layer='trigger', function='input', channel=1))
         # Checking if errors occurred
         for r in resps:
             if r.startswith('ERROR'):
@@ -500,8 +502,8 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                                                     acquire_delay=0.3*self.trigger_interval))
             self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.trigger_interval))
             self.resps.append(smu.set_source_shape('DC'))
-        self.resps.append(self.B.SMU1.set_arm_external(pin=1))  # todo: Вынести номер пина в файл конфигурации
-        self.resps.append(self.B.SMU2.set_arm_external(pin=1))
+        self.resps.append(self.B.SMU1.set_arm_external(pin=self.arm_link_pin))
+        self.resps.append(self.B.SMU2.set_arm_external(pin=self.arm_link_pin))
         # Configuring sweep
         if sign:  # Reset
             sweep_smu = self.A.SMU1
@@ -556,8 +558,8 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                                                     acquire_delay=0.3*self.pulse_width))
             self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.pulse_width))
         self.resps.append(self.gate_smu.set_source_shape('DC'))
-        self.resps.append(self.B.SMU1.set_arm_external(pin=1))  # todo: Вынести номер пина в файл конфигурации
-        self.resps.append(self.B.SMU2.set_arm_external(pin=1))
+        self.resps.append(self.B.SMU1.set_arm_external(pin=self.arm_link_pin))
+        self.resps.append(self.B.SMU2.set_arm_external(pin=self.arm_link_pin))
         # Pulse mode for BL and NL
         for smu in [self.A.SMU1, self.A.SMU2]:
             self.resps.append(smu.set_source_shape('pulse'))
@@ -623,7 +625,8 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             self.resps.append(smu.set_pulse_config(width=self.pulse_width))
         for smu in [self.gate_smu, self.temp_smu]:
             self.resps.append(smu.set_source_shape('DC'))
-            self.resps.append(smu.set_trigger_external(pin=2, count=self.trigger_count, acquire_delay=0.3*self.pulse_width))
+            self.resps.append(smu.set_trigger_external(pin=self.trigger_link_pin, count=self.trigger_count, 
+                                                       acquire_delay=0.3*self.pulse_width))
             self.resps.append(smu.set_arm_BUS())
         # Voltage config
         self.read_side = 1  # Read on reset
@@ -684,7 +687,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.pulse_width))
         for smu in [self.gate_smu, self.temp_smu]:
             self.resps.append(smu.set_source_shape('DC'))
-            self.resps.append(smu.set_arm_external(pin=1))  # todo: Вынести номер пина в файл конфигурации
+            self.resps.append(smu.set_arm_external(pin=self.arm_link_pin))
         # Pulse mode for BL and NL
         for smu in [self.A.SMU1, self.A.SMU2]:
             self.resps.append(smu.set_source_shape('pulse'))
@@ -735,7 +738,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.pulse_width))
         for smu in [self.gate_smu, self.temp_smu]:
             self.resps.append(smu.set_source_shape('DC'))
-            self.resps.append(smu.set_arm_external(pin=1))  # todo: Вынести номер пина в файл конфигурации
+            self.resps.append(smu.set_arm_external(pin=self.arm_link_pin))
         # Pulse mode for BL and NL
         for smu in [self.A.SMU1, self.A.SMU2]:
             self.resps.append(smu.set_source_shape('pulse'))

@@ -63,6 +63,12 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         else:
             self.gate_smu = self.B.SMU2
             self.temp_smu = self.B.SMU1
+        if self.settings['ITC_1T1R']['BL_channel'] == '1':
+            self.BL_smu = self.A.SMU1
+            self.NL_smu = self.B.SMU2
+        else:
+            self.BL_smu = self.A.SMU2
+            self.NL_smu = self.B.SMU1
         # Checking connections and instrument types
         for inst, name in zip([self.A, self.B], 
                               ['B2902B_A', 'B2902B_B']):
@@ -506,12 +512,12 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         self.resps.append(self.B.SMU2.set_arm_external(pin=self.arm_link_pin))
         # Configuring sweep
         if sign:  # Reset
-            sweep_smu = self.A.SMU1
-            zero_smu = self.A.SMU2
+            sweep_smu = self.BL_smu
+            zero_smu = self.NL_smu
             self.read_side = 1
         else:  # Set
-            sweep_smu = self.A.SMU2
-            zero_smu = self.A.SMU1
+            sweep_smu = self.NL_smu
+            zero_smu = self.BL_smu
             self.read_side = 2
         self.resps.append(sweep_smu.set_sweep_voltage(stop=v_stop, n_points=n_points, start=v_start, 
                                                       double=double, current_compliance=current_compliance))
@@ -566,15 +572,15 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             self.resps.append(smu.set_pulse_config(width=self.pulse_width))
         # Configuring pulses
         if apply_voltage == 0:
-            smu1_list, smu2_list = [read_voltage], [0]
+            BL_list, NL_list = [read_voltage], [0]
         else:
             if sign:  # Reset
-                smu1_list, smu2_list = [apply_voltage, read_voltage], [0, 0]
+                BL_list, NL_list = [apply_voltage, read_voltage], [0, 0]
             else: # Set
-                smu1_list, smu2_list = [0, read_voltage], [apply_voltage, 0]
+                BL_list, NL_list = [0, read_voltage], [apply_voltage, 0]
         self.read_side = 1
-        self.resps.append(self.A.SMU1.set_list_voltage(smu1_list, current_compliance=current_compliance))
-        self.resps.append(self.A.SMU2.set_list_voltage(smu2_list, current_compliance=current_compliance))
+        self.resps.append(self.BL_smu.set_list_voltage(BL_list, current_compliance=current_compliance))
+        self.resps.append(self.NL_smu.set_list_voltage(NL_list, current_compliance=current_compliance))
         self.resps.append(self.gate_smu.set_constant_voltage(voltage=GATE_VOLTAGE, current_compliance=1e-6))
         self.resps.append(self.gate_smu.set_base_voltage_immediate(voltage=GATE_VOLTAGE, current_compliance=1e-6))
         # Checking if configuration is set
@@ -630,20 +636,20 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             self.resps.append(smu.set_arm_BUS())
         # Voltage config
         self.read_side = 1  # Read on reset
-        smu1_seq, smu2_seq = [], []
+        BL_seq, NL_seq = [], []
         for pulse, read_flag in zip(pulse_sequence, read_flags):
             if read_flag:
-                smu1_seq.append(pulse)
-                smu2_seq.append(0)
+                BL_seq.append(pulse)
+                NL_seq.append(0)
             else:
                 if sign:
-                    smu1_seq.append(pulse)
-                    smu2_seq.append(0)
+                    BL_seq.append(pulse)
+                    NL_seq.append(0)
                 else:
-                    smu1_seq.append(0)
-                    smu2_seq.append(pulse)
-        self.resps.append(self.A.SMU1.set_list_voltage(smu1_seq, current_compliance=current_compliance))  # TODO apply BL and NL settings
-        self.resps.append(self.A.SMU2.set_list_voltage(smu2_seq, current_compliance=current_compliance))
+                    BL_seq.append(0)
+                    NL_seq.append(pulse)
+        self.resps.append(self.BL_smu.set_list_voltage(BL_seq, current_compliance=current_compliance))  # TODO apply BL and NL settings
+        self.resps.append(self.NL_smu.set_list_voltage(NL_seq, current_compliance=current_compliance))
         self.resps.append(self.gate_smu.set_constant_voltage(voltage=GATE_VOLTAGE, current_compliance=1e-6))
         self.resps.append(self.gate_smu.set_base_voltage_immediate(voltage=GATE_VOLTAGE, current_compliance=1e-6))
         flag, resp = self._check_config_and_start('SMU_std', arm_B=True)
@@ -694,8 +700,8 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             self.resps.append(smu.set_pulse_config(width=self.pulse_width))
         # Voltage config
         self.read_side = 1  # Read on reset
-        self.resps.append(self.A.SMU1.set_list_voltage([read_voltage] * n_pulses, current_compliance=current_compliance))  # TODO apply BL and NL settings
-        self.resps.append(self.A.SMU1.set_list_voltage([0] * n_pulses, current_compliance=current_compliance))
+        self.resps.append(self.BL_smu.set_list_voltage([read_voltage] * n_pulses, current_compliance=current_compliance))  # TODO apply BL and NL settings
+        self.resps.append(self.NL_smu.set_list_voltage([0] * n_pulses, current_compliance=current_compliance))
         self.resps.append(self.gate_smu.set_constant_voltage(voltage=GATE_VOLTAGE, current_compliance=1e-6))
         self.resps.append(self.gate_smu.set_base_voltage_immediate(voltage=GATE_VOLTAGE, current_compliance=1e-6))
         return self._check_config_and_start('SMU_pulsed_retention')
@@ -747,10 +753,10 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         self.read_side = 1  # Read on reset
         BL_seq = [0, abs(float(read_voltage)), abs(float(v_rev)), abs(float(read_voltage))] * n_cycles
         NL_seq = [abs(float(v_dir)), 0, 0, 0] * n_cycles
-        self.resps.append(self.A.SMU1.set_list_voltage(voltage_list=BL_seq, 
+        self.resps.append(self.BL_smu.set_list_voltage(voltage_list=BL_seq, 
                                                        current_compliance=rev_cc,
                                                        negative_current_compliance=dir_cc))
-        self.resps.append(self.A.SMU2.set_list_voltage(voltage_list=NL_seq, 
+        self.resps.append(self.NL_smu.set_list_voltage(voltage_list=NL_seq, 
                                                        current_compliance=dir_cc,
                                                        negative_current_compliance=rev_cc))
         # TODO check if the way we set the compliance level actually works (Add :pulse ?)

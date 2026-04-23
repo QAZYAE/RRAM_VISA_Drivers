@@ -759,7 +759,11 @@ class SMU(VISA_module):
             compliance_commands = [f'sense{self.ch}:current:DC:protection:level {current_compliance}']
             cc_response = f'CC = {current_compliance} A'
         else:
+            max_cc = max([current_compliance, negative_current_compliance])
+            print(f'MAX CC: {max_cc}')
             compliance_commands = [f'sense{self.ch}:current:DC:protection:level:positive {current_compliance}',
-                                    f'sense{self.ch}:current:DC:protection:level:negative {negative_current_compliance}']
+                                   f'sense{self.ch}:current:DC:protection:level:negative {negative_current_compliance}',
+                                   f'sense{self.ch}:current:range:auto off',
+                                   f'sense{self.ch}:current:range {max_cc}']
             cc_response = f'Positive CC = {current_compliance} A, Negative CC = {negative_current_compliance} A'
         return compliance_commands, cc_response

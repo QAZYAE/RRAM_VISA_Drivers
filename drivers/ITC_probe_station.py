@@ -651,6 +651,7 @@ class ITC_probe_station(GeneralDriver):
         # Pulse mode for BL and NL
         self.resps.append(self.mem_smu.set_source_shape('pulse'))
         self.resps.append(self.mem_smu.set_pulse_config(width=self.pulse_width))
+        self.resps.append(self.mem_smu.set_measurement_range(range_type='speed'))
         # Voltage config
         voltage_list = [abs(float(v_dir)), -abs(float(read_voltage)), -abs(float(v_rev)), -abs(float(read_voltage))] * n_cycles
         self.resps.append(self.mem_smu.set_list_voltage(voltage_list=voltage_list, 

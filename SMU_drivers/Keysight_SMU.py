@@ -297,6 +297,37 @@ class SMU(VISA_module):
                        f'sense{self.ch}:{meas_type}:aperture {aperture}']),    
             f'Integration time is set to {aperture} s.'
         )
+    
+
+    def set_measurement_range(self, range_type: str = 'normal', manual_range: Union[float, None] = None) -> str:
+        """Set the meauserement range type.
+
+        Args:
+            range_type (str, optional): Type of automatic range: `normal | resolution | speed`. Defaults to 'normal'.
+            manual_range (float | None, optional): Sets manual range value (float). If `manual_range` is
+                not None, `range_type` is ignored and automatic range is turned off. Defaults to None.
+
+        Returns:
+            str: Command response | error if an error occurred.
+        """
+        if range_type.lower() not in ['normal', 'resolution', 'speed']:
+             return f'ERROR: {self.resp} unknown measurement range type: {range_type}'
+        meas_type = 'current' if self.smu_mode == 'voltage' else 'voltage'
+        if manual_range is None:
+             return self.write_resp(
+                ';:'.join([f'sense{self.ch}:{meas_type}:range:auto on',
+                           f'sense{self.ch}:{meas_type}:range:auto:mode {range_type}']),
+                f'Measurement range type for {meas_type} is set to {range_type}.'
+             )
+        else:
+            if not (isinstance(manual_range, float) or isinstance(manual_range, int)):
+                return f'ERROR: {self.resp} wrong type of manual measurement range!'
+            unit = 'A' if meas_type == 'current' else 'V'
+            return self.write_resp(
+                ';:'.join(f'sense{self.ch}:{meas_type}:range:auto off',
+                          f'sense{self.ch}:{meas_type}:range {manual_range}'),
+                f'Measurement range for {meas_type} is set to {manual_range} {unit}.'
+            )
         
         
     def set_multimeter_mode(self, voltage_compliance: float = 1) -> str:
@@ -759,11 +790,7 @@ class SMU(VISA_module):
             compliance_commands = [f'sense{self.ch}:current:DC:protection:level {current_compliance}']
             cc_response = f'CC = {current_compliance} A'
         else:
-            max_cc = max([current_compliance, negative_current_compliance])
-            print(f'MAX CC: {max_cc}')
             compliance_commands = [f'sense{self.ch}:current:DC:protection:level:positive {current_compliance}',
-                                   f'sense{self.ch}:current:DC:protection:level:negative {negative_current_compliance}',
-                                   f'sense{self.ch}:current:range:auto off',
-                                   f'sense{self.ch}:current:range {max_cc}']
+                                   f'sense{self.ch}:current:DC:protection:level:negative {negative_current_compliance}']
             cc_response = f'Positive CC = {current_compliance} A, Negative CC = {negative_current_compliance} A'
         return compliance_commands, cc_response

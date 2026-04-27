@@ -75,6 +75,7 @@ class ITC_1T1R_32x8_switched(B2902B_1T1R_32x8_driver):
             config_path=os.path.join(self.drivers_path, 'Switch_drivers', 'config', 'Keysight_34980A_1T1R_32x8.json')
         )
         print('ITC_1T1R_32x8_switched init success')
+        self.logger.info('ITC_1T1R_32x8_switched init success')
         
         
     def get_tech_data(self) -> str:
@@ -102,8 +103,10 @@ class ITC_1T1R_32x8_switched(B2902B_1T1R_32x8_driver):
             flag, response (tuple[bool, str]): Connected flag (True if the cell was
             successfully disconnected), response or error.
         """
+        self.logger.info(f'Connecting cell {wl}-{bl}')
         resp = self.switch.connect_cell(row=wl+1, column=bl+1)
         if resp.startswith('ERROR'):
+            self.logger.error(f'Error connecting cell {wl}-{bl}: {resp}')
             return False, resp
         return True, resp
         
@@ -128,7 +131,9 @@ class ITC_1T1R_32x8_switched(B2902B_1T1R_32x8_driver):
         # Checking errors
         for r in resps:
             if r.startswith('ERROR'):
+                self.logger.critical(f'Could not disconnect the instruments!\n\t{r}')
                 return False, r
+        self.logger.info('VISA-instruments were disconnected')
         return True, 'VISA-instruments were disconnected'
     
     
@@ -147,7 +152,9 @@ class ITC_1T1R_32x8_switched(B2902B_1T1R_32x8_driver):
             flag2 = True
         flag = flag1 and flag2
         if flag:
+            self.logger.info('Instruments are in standby mode')
             return True, 'Instruments are in standby mode'
+        self.logger.error(f'Standby error: {r1}\n{r2}')
         return False, f'{r1}\n{r2}'
     
     
@@ -167,9 +174,11 @@ class ITC_1T1R_32x8_switched(B2902B_1T1R_32x8_driver):
             resps.append(self.B.set_output_state('off'))
         for smu in [self.A.SMU1, self.A.SMU2, self.B.SMU1]:
             resps.append(smu.set_base_voltage_immediate(0, current_compliance=1e-8))
+        self.logger.debug('\t' + '\t\n'.join(resps))
         for r in resps:
             if r.startswith('ERROR'):
                 flag = False
+                self.logger.info('Panic attempt failed!')
         if not flag:
             resps.append(self.switch.standby())
         return flag, '\n'.join(resps)
@@ -183,7 +192,8 @@ class ITC_1T1R_32x8_switched(B2902B_1T1R_32x8_driver):
             response or error.
         """
         resps = []
-        for _ in range(5):
+        for i in range(5):
+            self.logger.debug(f'Panic attempt {i}')
             flag, response = self._panic_attempt()
             resps.append(response)
             if flag:
@@ -191,6 +201,9 @@ class ITC_1T1R_32x8_switched(B2902B_1T1R_32x8_driver):
         if flag:
             resps.append(self.A.set_output_state('on'))
             resps.append(self.B.set_output_state('on'))
+            self.logger.critical('Panic resolved!')
+        else:
+            self.logger.error('Panic was not resolved!\n\t' + '\n\t'.join(resps))
         return flag, '\n'.join(resps)
     
     

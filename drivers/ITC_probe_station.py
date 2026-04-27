@@ -317,7 +317,7 @@ class ITC_probe_station(GeneralDriver):
             data_to_send = self.queue.pop(0)
             self.logger.info(f'Data returned: {data_to_send}')
             self.logger.warning(f'Temperature: {data_to_send[4]} C')
-            print(f'Temperature: {data_to_send[4]} C')
+            # print(f'Temperature: {data_to_send[4]} C')
             return data_to_send  # Tuple[R, time, v, cur, Temp, V_temp]
         except IndexError as e:
             self.logger.error(f'Sense queue is empty! Error: {e}')
@@ -452,6 +452,7 @@ class ITC_probe_station(GeneralDriver):
                                                     acquire_delay=0.3*self.trigger_interval))
             self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.trigger_interval))
             self.resps.append(smu.set_source_shape('DC'))
+        self.resps.append(self.mem_smu.set_measurement_range(range_type='normal'))
         # Configuring sweep
         if sign:  # Reset
             start = -float(v_start)
@@ -503,6 +504,7 @@ class ITC_probe_station(GeneralDriver):
         # Pulse mode memristor smu
         self.resps.append(self.mem_smu.set_source_shape('pulse'))
         self.resps.append(self.mem_smu.set_pulse_config(width=self.pulse_width))
+        self.resps.append(self.mem_smu.set_measurement_range(range_type='speed'))
         # Configuring pulses
         if apply_voltage == 0:
             smu_list = [-float(read_voltage)]  # Read on reset
@@ -557,6 +559,7 @@ class ITC_probe_station(GeneralDriver):
             self.resps.append(smu.set_trigger_BUS(self.trigger_count, acquire_delay=0.3*self.pulse_width))
         self.resps.append(self.mem_smu.set_source_shape('pulse'))
         self.resps.append(self.mem_smu.set_pulse_config(width=self.pulse_width))
+        self.resps.append(self.mem_smu.set_measurement_range(range_type='speed'))
         self.resps.append(self.temp_smu.set_source_shape('DC'))
         # Voltage config
         smu_seq = []
@@ -606,6 +609,7 @@ class ITC_probe_station(GeneralDriver):
         self.resps.append(self.temp_smu.set_source_shape('DC'))
         # Pulse mode for BL and NL
         self.resps.append(self.mem_smu.set_source_shape('pulse'))
+        self.resps.append(self.mem_smu.set_measurement_range(range_type='speed'))
         self.resps.append(self.mem_smu.set_pulse_config(width=self.pulse_width))
         # Voltage config
         self.resps.append(self.mem_smu.set_list_voltage([-float(read_voltage)] * n_pulses, current_compliance=current_compliance))

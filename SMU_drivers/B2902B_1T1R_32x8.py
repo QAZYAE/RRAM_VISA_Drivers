@@ -385,7 +385,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             data_to_send = self.queue.pop(0)
             self.logger.info(f'Data returned: {data_to_send}')
             self.logger.warning(f'Temperature: {data_to_send[4]} C')
-            print(f'Temperature: {data_to_send[4]} C')
+            # print(f'Temperature: {data_to_send[4]} C')
             return data_to_send  # Tuple[R, time]
         except IndexError:
             self.logger.error('Sense queue is empty!')
@@ -524,6 +524,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                                                     acquire_delay=0.3*self.trigger_interval))
             self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.trigger_interval))
             self.resps.append(smu.set_source_shape('DC'))
+            self.resps.append(smu.set_measurement_range(range_type='normal'))
         self.resps.append(self.B.SMU1.set_arm_external(pin=self.arm_link_pin))
         self.resps.append(self.B.SMU2.set_arm_external(pin=self.arm_link_pin))
         # Configuring sweep
@@ -579,6 +580,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
                                                     acquire_delay=0.3*self.pulse_width))
             self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.pulse_width))
+            self.resps.append(self.mem_smu.set_measurement_range(range_type='speed'))
         self.resps.append(self.gate_smu.set_source_shape('DC'))
         self.resps.append(self.B.SMU1.set_arm_external(pin=self.arm_link_pin))
         self.resps.append(self.B.SMU2.set_arm_external(pin=self.arm_link_pin))
@@ -645,6 +647,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             self.resps.append(smu.set_trigger_BUS(self.trigger_count, acquire_delay=0.3*self.pulse_width))
             self.resps.append(smu.set_source_shape('pulse'))
             self.resps.append(smu.set_pulse_config(width=self.pulse_width))
+            self.resps.append(smu.set_measurement_range(range_type='speed'))
         for smu in [self.gate_smu, self.temp_smu]:
             self.resps.append(smu.set_source_shape('DC'))
             self.resps.append(smu.set_trigger_external(pin=self.trigger_link_pin, count=self.trigger_count, 
@@ -714,6 +717,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         for smu in [self.A.SMU1, self.A.SMU2]:
             self.resps.append(smu.set_source_shape('pulse'))
             self.resps.append(smu.set_pulse_config(width=self.pulse_width))
+            self.resps.append(smu.set_measurement_range(range_type='speed'))
         # Voltage config
         self.read_side = 1  # Read on reset
         self.resps.append(self.BL_smu.set_list_voltage([read_voltage] * n_pulses, current_compliance=current_compliance))
@@ -765,6 +769,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         for smu in [self.A.SMU1, self.A.SMU2]:
             self.resps.append(smu.set_source_shape('pulse'))
             self.resps.append(smu.set_pulse_config(width=self.pulse_width))
+            self.resps.append(smu.set_measurement_range(range_type='speed'))
         # Voltage config
         self.read_side = 1  # Read on reset
         BL_seq = [0, abs(float(read_voltage)), abs(float(v_rev)), abs(float(read_voltage))] * n_cycles

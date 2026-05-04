@@ -7,7 +7,7 @@ import time
 import numpy as np
 from typing import Union
 from RRAM_VISA_Drivers.core import GeneralDriver
-from RRAM_VISA_Drivers.SMU_drivers import B2902B
+from RRAM_VISA_Drivers.SMU_drivers import B2902B, Keysight_SMU
 from RRAM_VISA_Drivers.core.temperature import K_volt2temp
 from RRAM_VISA_Drivers.core.gui_connection import set_driver_instruments, check_connection_B2902B
 
@@ -33,6 +33,9 @@ class ITC_probe_station(GeneralDriver):
             acquire loop and user wants to stop the experiment.
         queue (list): Results queue that fills while reading the data from instruments.
         sim (str): True for simulation mode.
+        enable_temperature (bool): If True, temperature measurement is enabled.
+        smu_list (list): List of SMUs to use in standart configurations.
+        smu_channels (str): String of channels used in the setup ('1' | '2' | '1,2').
     """
     trigger_interval: float = 100e-6
     trigger_count: int = 0
@@ -40,6 +43,9 @@ class ITC_probe_station(GeneralDriver):
     need_stop: bool = False
     queue: list = []
     sim: str = False
+    enable_temperature: bool
+    smu_list: list[Keysight_SMU]
+    smu_channels: str
     
     def __init__(
         self, 
@@ -70,12 +76,19 @@ class ITC_probe_station(GeneralDriver):
             A_res = self.rm.open_resource(B2902B_address)
         self.A = B2902B(resource=A_res, instrument_name='B2902B')
         # Config
+        self.enable_temperature = eval(self.settings['ITC_probe_station']['Measure_temperature'])
         if self.settings['ITC_probe_station']['Memristor_channel'] == '1':
             self.mem_smu = self.A.SMU1
             self.temp_smu = self.A.SMU2
         else:
             self.mem_smu = self.A.SMU2
             self.temp_smu = self.A.SMU1
+        if self.enable_temperature:
+            self.smu_list = [self.mem_smu, self.temp_smu]
+            self.smu_channels = '1,2'
+        else:
+            self.smu_list = [self.mem_smu]
+            self.smu_channels = self.settings['ITC_probe_station']['Memristor_channel']
         # Checking connection and instrument types
         flag = self.A.check_instrument_connection()
         self.A.get_errors()  # Clear error queue
@@ -89,13 +102,14 @@ class ITC_probe_station(GeneralDriver):
         resps.append(self.A.set_output_state('on'))
         resps.append(self.A.set_output_filter('off'))
         # Set multimeter mode for temperature smu
-        resps.append(self.temp_smu.set_multimeter_mode(voltage_compliance=1))
+        if self.enable_temperature:
+            resps.append(self.temp_smu.set_multimeter_mode(voltage_compliance=1))
         resps.append(self.mem_smu.set_smu_mode('voltage'))
         # Configuring data output format
         resps.append(self.A.set_data_format('voltage,current,time'))
         # Configuring triggers
-        resps.append(self.A.SMU1.set_arm_BUS())
-        resps.append(self.A.SMU2.set_arm_BUS())
+        for smu in self.smu_list:
+            resps.append(smu.set_arm_BUS())
         # Checking if errors occurred
         for r in resps:
             if r.startswith('ERROR'):
@@ -197,7 +211,7 @@ class ITC_probe_station(GeneralDriver):
         flag = True
         resps.append(self.A.clear())
         resps.append(self.A.set_output_state('off'))
-        for smu in [self.A.SMU1, self.A.SMU2]:
+        for smu in self.smu_list:
             resps.append(smu.set_base_voltage_immediate(0, current_compliance=1e-6))
         self.logger.debug('\t' + '\t\n'.join(resps))
         for r in resps:
@@ -304,10 +318,15 @@ class ITC_probe_station(GeneralDriver):
             V = sense_mem[0::3]
             Curr = sense_mem[1::3]
             timestamp = self.exp_start_time + sense_mem[2::3]
-            R = np.abs(V / Curr)
+            R = V / Curr
+            if R < 0: 
+                R = np.inf
             # Temperature
-            V_temp = sense_temp[0::3]
-            Temp = K_volt2temp(V_temp, room_temp=float(self.settings['temperature']['room_temperature']))
+            if self.enable_temperature:
+                V_temp = sense_temp[0::3]
+                Temp = K_volt2temp(V_temp, room_temp=float(self.settings['temperature']['room_temperature']))
+            else:
+                V_temp, Temp = np.nan, np.nan  # TODO: remove
             self.logger.debug(f'Sense_data acquired: V = {V}, curr = {Curr}, R = {R}, Time={timestamp}, V_temp={V_temp}, Temp={Temp}')
             for r, t, v, cur, tem, v_t in zip(R, timestamp, V, Curr, Temp, V_temp):
                 self.queue.append((r, t, v, cur, tem, v_t))
@@ -316,7 +335,7 @@ class ITC_probe_station(GeneralDriver):
             self.logger.debug(f'ACQUIRED COUNTER (AFT): {self.acquired_counter}')
             data_to_send = self.queue.pop(0)
             self.logger.info(f'Data returned: {data_to_send}')
-            self.logger.warning(f'Temperature: {data_to_send[4]} C')
+            # self.logger.warning(f'Temperature: {data_to_send[4]} C')
             # print(f'Temperature: {data_to_send[4]} C')
             return data_to_send  # Tuple[R, time, v, cur, Temp, V_temp]
         except IndexError as e:
@@ -342,7 +361,7 @@ class ITC_probe_station(GeneralDriver):
         if not flag:
             self.logger.error(f'.trigger(): A is not armed in {attempts} attempts! A status: {resp}')
             return False, f'.trigger(): A is not armed! A status: {resp}'
-        resp = self.A.trigger()  # Trigger A
+        resp = self.A.trigger(self.smu_channels)  # Trigger A
         if resp.startswith('ERROR'):
             self.logger.error(f'.sense(): A trigger error: {resp}')
             return False, f'.sense(): A trigger error: {resp}'
@@ -400,13 +419,13 @@ class ITC_probe_station(GeneralDriver):
             return False, response
         self.logger.info(f'{mode_name} config success!')
         # Start the experiment
-        resp = self.A.initiate()
+        resp = self.A.initiate(channel=self.smu_channels)
         self.logger.debug(f'A initiated. Response: {resp}')
         self.logger.debug(f'.config() TRIGGER INSTRUMENT STATUS: A: {self.A.check_trigger_status()}')
-        flag, resp = self.A.check_initiated()
+        flag, resp = self.A.check_initiated(channel=self.smu_channels)
         if flag:
             self.logger.debug(f'A is ready. Status: {resp}')
-            resp = self.A.arm()
+            resp = self.A.arm(channel=self.smu_channels)
             self.logger.debug(f'ARM trigger sent to A. Response: {resp}')
         else:
             self.logger.error(f'A is not ready for ARM trigger! Status: {resp}')
@@ -447,7 +466,7 @@ class ITC_probe_station(GeneralDriver):
                               trigger_count = 2 * n_points if double else n_points,
                               trigger_interval = trigger_interval)
         # Configuring triggers and source shapes
-        for smu in [self.A.SMU1, self.A.SMU2]:
+        for smu in self.smu_list:
             self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
                                                     acquire_delay=0.3*self.trigger_interval))
             self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.trigger_interval))
@@ -497,7 +516,7 @@ class ITC_probe_station(GeneralDriver):
                               trigger_count = trigger_count,
                               pulse_width = pulse_width)
         # Configuring triggers and source shapes
-        for smu in [self.A.SMU1, self.A.SMU2]:
+        for smu in self.smu_list:
             self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
                                                     acquire_delay=0.3*self.pulse_width))
             self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.pulse_width))
@@ -554,13 +573,14 @@ class ITC_probe_station(GeneralDriver):
                               trigger_count = len(pulse_sequence),
                               pulse_width = pulse_width)
         # Triggers and source shapes
-        for smu in [self.A.SMU1, self.A.SMU2]:
+        for smu in self.smu_list:
             self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.pulse_width))
             self.resps.append(smu.set_trigger_BUS(self.trigger_count, acquire_delay=0.3*self.pulse_width))
         self.resps.append(self.mem_smu.set_source_shape('pulse'))
         self.resps.append(self.mem_smu.set_pulse_config(width=self.pulse_width))
         self.resps.append(self.mem_smu.set_measurement_range(range_type='speed'))
-        self.resps.append(self.temp_smu.set_source_shape('DC'))
+        if self.enable_temperature:
+            self.resps.append(self.temp_smu.set_source_shape('DC'))
         # Voltage config
         smu_seq = []
         for pulse, read_flag in zip(pulse_sequence, read_flags):
@@ -602,11 +622,12 @@ class ITC_probe_station(GeneralDriver):
                               pulse_width = pulse_width,
                               trigger_interval=trigger_interval)
         # Configuring triggers and source shapes
-        for smu in [self.A.SMU1, self.A.SMU2]:
+        for smu in self.smu_list:
             self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
                                                acquire_delay=0.3*self.pulse_width))
             self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.pulse_width))
-        self.resps.append(self.temp_smu.set_source_shape('DC'))
+        if self.enable_temperature:
+            self.resps.append(self.temp_smu.set_source_shape('DC'))
         # Pulse mode for BL and NL
         self.resps.append(self.mem_smu.set_source_shape('pulse'))
         self.resps.append(self.mem_smu.set_measurement_range(range_type='speed'))
@@ -647,11 +668,12 @@ class ITC_probe_station(GeneralDriver):
         self._set_init_values(mode='pulse', trigger_count=4*n_cycles,
                               pulse_width=pulse_width, trigger_interval=trigger_interval)
         # Configuring triggers and source shapes
-        for smu in [self.A.SMU1, self.A.SMU2]:
+        for smu in self.smu_list:
             self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
                                                acquire_delay=0.3*self.pulse_width))
             self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.pulse_width))
-        self.resps.append(self.temp_smu.set_source_shape('DC'))
+        if self.enable_temperature:
+            self.resps.append(self.temp_smu.set_source_shape('DC'))
         # Pulse mode for BL and NL
         self.resps.append(self.mem_smu.set_source_shape('pulse'))
         self.resps.append(self.mem_smu.set_pulse_config(width=self.pulse_width))
@@ -661,5 +683,4 @@ class ITC_probe_station(GeneralDriver):
         self.resps.append(self.mem_smu.set_list_voltage(voltage_list=voltage_list, 
                                                         current_compliance=dir_cc,
                                                         negative_current_compliance=rev_cc))
-        # TODO check if the way we set the compliance level actually works (Add :pulse ?)
         return self._check_config_and_start('SMU_endurance')

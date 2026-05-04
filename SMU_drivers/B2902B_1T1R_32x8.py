@@ -9,7 +9,7 @@ import time
 import numpy as np
 from typing import Union
 from RRAM_VISA_Drivers.core import GeneralDriver
-from RRAM_VISA_Drivers.SMU_drivers import B2902B
+from RRAM_VISA_Drivers.SMU_drivers import B2902B, Keysight_SMU
 from RRAM_VISA_Drivers.core.temperature import K_volt2temp
 
 
@@ -34,6 +34,12 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             acquire loop and user wants to stop the experiment.
         queue (list): Results queue that fills while reading the data from instruments.
         sim (str): True for simulation mode.
+        enable_temperature (bool): If True, temperature measurement is enabled.
+        smu_list (list): Full list of SMUs to use in standart configurations.
+        A_smu_list (list): List of Instrument A's SMUs used in the setup.
+        B_smu_list (list): List of Instrument B's SMUs used in the setup.
+        A_smu_channels (str): String of Instrument A's channels used in the setup ('1' | '2' | '1,2').
+        B_smu_channels (str): String of Instrument B's channels used in the setup ('1' | '2' | '1,2').
     """
     trigger_interval: float = 100e-6
     trigger_count: int = 0
@@ -42,6 +48,12 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
     need_stop: bool = False
     queue: list = []
     sim: str = False
+    enable_temperature: bool
+    smu_list: list[Keysight_SMU]
+    A_smu_list: list[Keysight_SMU]
+    B_smu_list: list[Keysight_SMU]
+    A_smu_channels: str
+    B_smu_channels: str
     
     def __init__(
         self, 
@@ -65,6 +77,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         self.A = B2902B(resource=B2902B_A_res, instrument_name='B2902B_A')  # Controls BL and NL
         self.B = B2902B(resource=B2902B_B_res, instrument_name='B2902B_B')  # Controls WL
         # Config
+        self.enable_temperature = eval(self.settings['ITC_1T1R']['Measure_temperature'])
         if self.settings['ITC_1T1R']['Gate_channel'] == '1':
             self.gate_smu = self.B.SMU1
             self.temp_smu = self.B.SMU2
@@ -85,6 +98,16 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                 1: 2,  # BL -> SMU2
                 2: 1
             }
+        if self.enable_temperature:
+            self.smu_list = [self.BL_smu, self.NL_smu, self.gate_smu, self.temp_smu]
+            self.B_smu_list = [self.gate_smu, self.temp_smu]
+            self.B_smu_channels = '1,2'
+        else:
+            self.smu_list = [self.BL_smu, self.NL_smu, self.gate_smu]
+            self.B_smu_list = [self.gate_smu]
+            self.B_smu_channels = self.settings['ITC_1T1R']['Gate_channel']
+        self.A_smu_list = [self.BL_smu, self.NL_smu]
+        self.A_smu_channels = '1,2'
         # Checking connections and instrument types
         for inst, name in zip([self.A, self.B], 
                               ['B2902B_A', 'B2902B_B']):
@@ -101,7 +124,8 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             resps.append(inst.set_output_state('on'))
             resps.append(inst.set_output_filter('off'))
         # Setting multimeter mode for temperature smu
-        resps.append(self.temp_smu.set_multimeter_mode(voltage_compliance=1))
+        if self.enable_temperature:
+            resps.append(self.temp_smu.set_multimeter_mode(voltage_compliance=1))
         for smu in [self.A.SMU1, self.A.SMU2, self.gate_smu]:
             resps.append(smu.set_smu_mode('voltage'))
         # Configuring data output format
@@ -112,10 +136,16 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         self.trigger_link_pin = int(self.settings['ITC_1T1R']['Trigger_link_pin'])
         resps.append(self.A.SMU1.set_arm_BUS())
         resps.append(self.A.SMU2.set_arm_BUS())
-        resps.append(self.A.set_external_trigger_link(pin=self.arm_link_pin, trigger_layer='arm', function='output', channel=1))
-        resps.append(self.B.set_external_trigger_link(pin=self.arm_link_pin, trigger_layer='arm', function='input', channel=1))
-        resps.append(self.A.set_external_trigger_link(pin=self.trigger_link_pin, trigger_layer='trigger', function='output', channel=1))
-        resps.append(self.B.set_external_trigger_link(pin=self.trigger_link_pin, trigger_layer='trigger', function='input', channel=1))
+        resps.append(self.A.set_external_trigger_link(pin=self.arm_link_pin, 
+                                                      trigger_layer='arm', 
+                                                      function='output', 
+                                                      channel=int(self._read_sides[1])))  # BL channel
+        resps.append(self.B.set_external_trigger_link(pin=self.arm_link_pin, trigger_layer='arm', function='input'))
+        resps.append(self.A.set_external_trigger_link(pin=self.trigger_link_pin, 
+                                                      trigger_layer='trigger', 
+                                                      function='output', 
+                                                      channel=int(self._read_sides[1])))  # BL channel
+        resps.append(self.B.set_external_trigger_link(pin=self.trigger_link_pin, trigger_layer='trigger', function='input'))
         # Checking if errors occurred
         for r in resps:
             if r.startswith('ERROR'):
@@ -226,7 +256,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         resps.append(self.B.clear())
         resps.append(self.A.set_output_state('off'))
         resps.append(self.B.set_output_state('off'))
-        for smu in [self.A.SMU1, self.A.SMU2, self.gate_smu]:
+        for smu in self.A_smu_list + [self.gate_smu]:
             resps.append(smu.set_base_voltage_immediate(0, current_compliance=1e-6))
         self.logger.debug('\t' + '\t\n'.join(resps))
         for r in resps:
@@ -308,11 +338,11 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                 # Trigger
                 if trigger:
                     self.logger.debug(f'SENSE TRIGGER INSTRUMENT STATUS: A: {self.A.check_trigger_status()}, B: {self.B.check_trigger_status()}')
-                    flag, resp = self.B.check_armed()  # Check if B is ready for trigger
+                    flag, resp = self.B.check_armed(channel=self.B_smu_channels)  # Check if B is ready for trigger
                     if not flag:
                         self.logger.error(f'.sense(): B is not armed! B status: {resp}')
                         return f'.sense(): B is not armed! B status: {resp}'
-                    resp = self.A.trigger()  # Trigger A
+                    resp = self.A.trigger(channel=self.A_smu_channels)  # Trigger A
                     if resp.startswith('ERROR'):
                         self.logger.error(f'.sense(): A trigger error: {resp}')
                         return f'.sense(): A trigger error: {resp}'
@@ -338,10 +368,13 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                 for i in range(acquire_attempts):
                     sense_data_B = self.B.get_sense_data(offset=self.acquired_counter)  # sense_ch1, sense_ch2
                     self.logger.debug(f'Sense_B: acquire attempt {i}: {sense_data_B}')
-                    if (sense_data_B is not None and
-                        len(sense_data_A[0])/3*2 <= len(sense_data_B[0]) and  # At least equal amount of data acquired
-                        len(sense_data_A[1])/3*2 <= len(sense_data_B[1])):
-                        break
+                    if sense_data_B is not None:
+                        flag = True
+                        for channel in list(map(int, self.B_smu_channels.split(','))):
+                            if not len(sense_data_A[channel])/3*2 <= len(sense_data_B[channel]):  # At least equal amount of data acquired
+                                flag = False
+                        if flag:
+                            break
                     if self.need_stop:
                         self.logger.warning('Sense_B: Need stop flag received!')
                         break
@@ -366,7 +399,9 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             V = primary_sense[0::3]
             Curr = primary_sense[1::3]
             timestamp = self.exp_start_time + primary_sense[2::3]
-            R = np.abs(V / Curr) 
+            R = V / Curr 
+            if R < 0:
+                R = np.inf
             # Temperature and WL
             if self.settings['ITC_1T1R']['Gate_channel'] == '1':
                 # sense_gate = sense1_B
@@ -374,8 +409,11 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             else:
                 # sense_gate = sense2_B
                 sense_temp = sense1_B
-            V_temp = sense_temp[0:len(R)*2:2]
-            Temp = K_volt2temp(V_temp, room_temp=float(self.settings['temperature']['room_temperature']))
+            if self.enable_temperature:
+                V_temp = sense_temp[0:len(R)*2:2]
+                Temp = K_volt2temp(V_temp, room_temp=float(self.settings['temperature']['room_temperature']))
+            else:
+                V_temp, Temp = np.nan, np.nan
             self.logger.debug(f'Sense_data acquired: V = {V}, curr = {Curr}, R = {R}, Time={timestamp}, V_temp={V_temp}, Temp={Temp}')
             for r, t, v, cur, tem, v_t in zip(R, timestamp, V, Curr, Temp, V_temp):
                 self.queue.append((r, t, v, cur, tem, v_t))
@@ -384,7 +422,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             self.logger.debug(f'ACQUIRED COUNTER (AFT): {self.acquired_counter}')
             data_to_send = self.queue.pop(0)
             self.logger.info(f'Data returned: {data_to_send}')
-            self.logger.warning(f'Temperature: {data_to_send[4]} C')
+            # self.logger.warning(f'Temperature: {data_to_send[4]} C')
             # print(f'Temperature: {data_to_send[4]} C')
             return data_to_send  # Tuple[R, time]
         except IndexError:
@@ -400,11 +438,11 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             sent successfully, response or error.
         """
         self.logger.debug(f'.trigger() TRIGGER INSTRUMENT STATUS: A: {self.A.check_trigger_status()}, B: {self.B.check_trigger_status()}')
-        flag, resp = self.B.check_armed()  # Check if B is ready for trigger
+        flag, resp = self.B.check_armed(channel=self.B_smu_channels)  # Check if B is ready for trigger
         if not flag:
             self.logger.error(f'.trigger(): B is not armed! B status: {resp}')
             return False, f'.trigger(): B is not armed! B status: {resp}'
-        resp = self.A.trigger()  # Trigger A
+        resp = self.A.trigger(channel=self.A_smu_channels)  # Trigger A
         if resp.startswith('ERROR'):
             self.logger.error(f'.sense(): A trigger error: {resp}')
             return False, f'.sense(): A trigger error: {resp}'
@@ -464,21 +502,21 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             return False, response
         self.logger.info(f'{mode_name} config success!')
         # Start the experiment
-        resp = self.A.initiate()
+        resp = self.A.initiate(channel=self.A_smu_channels)
         self.logger.debug(f'A initiated. Response: {resp}')
-        resp = self.B.initiate()
+        resp = self.B.initiate(channel=self.B_smu_channels)
         self.logger.debug(f'B initiated. Response: {resp}')
         self.logger.debug(f'.config() TRIGGER INSTRUMENT STATUS: A: {self.A.check_trigger_status()}, B: {self.B.check_trigger_status()}')
         if arm_B:  # If we need to send arm trigger to B
-            resp = self.A.arm()
+            resp = self.A.arm(channel=self.A_smu_channels)
             self.logger.debug(f'ARM trigger sent to A. Response: {resp}')
-            resp = self.B.arm()
+            resp = self.B.arm(channel=self.B_smu_channels)
             self.logger.debug(f'ARM trigger sent to B. Response: {resp}')
         else:
-            flag, resp = self.B.check_initiated()
+            flag, resp = self.B.check_initiated(channel=self.B_smu_channels)
             if flag:
                 self.logger.debug(f'B is ready. Status: {resp}')
-                resp = self.A.arm()
+                resp = self.A.arm(self.A_smu_channels)
                 self.logger.debug(f'ARM trigger sent to A. Response: {resp}')
             else:
                 self.logger.error(f'B is not ready for external ARM trigger! Status: {resp}')
@@ -519,14 +557,14 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                               trigger_count = 2 * n_points if double else n_points,
                               trigger_interval = trigger_interval)
         # Configuring triggers and source shapes
-        for smu in [self.A.SMU1, self.A.SMU2, self.gate_smu, self.temp_smu]:
+        for smu in self.smu_list:
             self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
                                                     acquire_delay=0.3*self.trigger_interval))
             self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.trigger_interval))
             self.resps.append(smu.set_source_shape('DC'))
             self.resps.append(smu.set_measurement_range(range_type='normal'))
-        self.resps.append(self.B.SMU1.set_arm_external(pin=self.arm_link_pin))
-        self.resps.append(self.B.SMU2.set_arm_external(pin=self.arm_link_pin))
+        for smu in self.B_smu_list:
+            self.resps.append(smu.set_arm_external(pin=self.arm_link_pin))
         # Configuring sweep
         if sign:  # Reset
             sweep_smu = self.BL_smu
@@ -576,16 +614,16 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                               trigger_count = trigger_count,
                               pulse_width = pulse_width)
         # Configuring triggers and source shapes
-        for smu in [self.A.SMU1, self.A.SMU2, self.gate_smu, self.temp_smu]:
+        for smu in self.smu_list:
             self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
                                                     acquire_delay=0.3*self.pulse_width))
             self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.pulse_width))
-            self.resps.append(self.mem_smu.set_measurement_range(range_type='speed'))
+            self.resps.append(smu.set_measurement_range(range_type='speed'))
         self.resps.append(self.gate_smu.set_source_shape('DC'))
-        self.resps.append(self.B.SMU1.set_arm_external(pin=self.arm_link_pin))
-        self.resps.append(self.B.SMU2.set_arm_external(pin=self.arm_link_pin))
+        for smu in self.B_smu_list:
+            self.resps.append(smu.set_arm_external(pin=self.arm_link_pin))
         # Pulse mode for BL and NL
-        for smu in [self.A.SMU1, self.A.SMU2]:
+        for smu in self.A_smu_list:
             self.resps.append(smu.set_source_shape('pulse'))
             self.resps.append(smu.set_pulse_config(width=self.pulse_width))
         # Configuring pulses
@@ -641,14 +679,14 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                               trigger_count = len(pulse_sequence),
                               pulse_width = pulse_width)
         # Triggers and source shapes
-        for smu in [self.A.SMU1, self.A.SMU2, self.gate_smu, self.temp_smu]:
+        for smu in self.smu_list:
             self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.pulse_width))
-        for smu in [self.A.SMU1, self.A.SMU2]:
+        for smu in self.A_smu_list:
             self.resps.append(smu.set_trigger_BUS(self.trigger_count, acquire_delay=0.3*self.pulse_width))
             self.resps.append(smu.set_source_shape('pulse'))
             self.resps.append(smu.set_pulse_config(width=self.pulse_width))
             self.resps.append(smu.set_measurement_range(range_type='speed'))
-        for smu in [self.gate_smu, self.temp_smu]:
+        for smu in self.B_smu_list:
             self.resps.append(smu.set_source_shape('DC'))
             self.resps.append(smu.set_trigger_external(pin=self.trigger_link_pin, count=self.trigger_count, 
                                                        acquire_delay=0.3*self.pulse_width))
@@ -706,15 +744,15 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                               pulse_width = pulse_width,
                               trigger_interval=trigger_interval)
         # Configuring triggers and source shapes
-        for smu in [self.A.SMU1, self.A.SMU2, self.gate_smu, self.temp_smu]:
+        for smu in self.smu_list:
             self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
                                                acquire_delay=0.3*self.pulse_width))
             self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.pulse_width))
-        for smu in [self.gate_smu, self.temp_smu]:
+        for smu in self.B_smu_list:
             self.resps.append(smu.set_source_shape('DC'))
             self.resps.append(smu.set_arm_external(pin=self.arm_link_pin))
         # Pulse mode for BL and NL
-        for smu in [self.A.SMU1, self.A.SMU2]:
+        for smu in self.A_smu_list:
             self.resps.append(smu.set_source_shape('pulse'))
             self.resps.append(smu.set_pulse_config(width=self.pulse_width))
             self.resps.append(smu.set_measurement_range(range_type='speed'))
@@ -758,15 +796,15 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         self._set_init_values(mode='pulse', trigger_count=4*n_cycles,
                               pulse_width=pulse_width, trigger_interval=trigger_interval)
         # Configuring triggers and source shapes
-        for smu in [self.A.SMU1, self.A.SMU2, self.gate_smu, self.temp_smu]:
+        for smu in self.smu_list:
             self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
                                                acquire_delay=0.3*self.pulse_width))
             self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.pulse_width))
-        for smu in [self.gate_smu, self.temp_smu]:
+        for smu in self.B_smu_list:
             self.resps.append(smu.set_source_shape('DC'))
             self.resps.append(smu.set_arm_external(pin=self.arm_link_pin))
         # Pulse mode for BL and NL
-        for smu in [self.A.SMU1, self.A.SMU2]:
+        for smu in self.A_smu_list:
             self.resps.append(smu.set_source_shape('pulse'))
             self.resps.append(smu.set_pulse_config(width=self.pulse_width))
             self.resps.append(smu.set_measurement_range(range_type='speed'))

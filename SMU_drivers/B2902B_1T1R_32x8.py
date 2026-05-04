@@ -73,14 +73,14 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             self.temp_smu = self.B.SMU1
         if self.settings['ITC_1T1R']['BL_channel'] == '1':
             self.BL_smu = self.A.SMU1
-            self.NL_smu = self.B.SMU2
+            self.NL_smu = self.A.SMU2
             self._read_sides = {
                 1: 1,  # BL -> SMU1
                 2: 2
             }
         else:
             self.BL_smu = self.A.SMU2
-            self.NL_smu = self.B.SMU1
+            self.NL_smu = self.A.SMU1
             self._read_sides = {
                 1: 2,  # BL -> SMU2
                 2: 1

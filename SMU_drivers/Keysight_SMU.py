@@ -350,7 +350,7 @@ class SMU(VISA_module):
         )
         
         
-    def get_sense_data(self, offset: int = 0) -> Union[np.ndarray, str, None]:
+    def get_sense_data(self, offset: int = 0, size: Union[int, None] = None) -> Union[np.ndarray, str, None]:
         """Return the array data, format is specified by B2902B.set_data_format().
         The data is not cleared until the .initiate() method is executed.
 
@@ -358,6 +358,8 @@ class SMU(VISA_module):
             offset (int, optional): Indicates the beginning of the data received. The index is from 
                 0 to maximum (depends on the buffer state). Defaults to 0 (All data is received).
                 If offset is `-1`, latest data entry is received.
+            size (int | None, optional): Size of the buffer to read (starting from `offset`). If `size`
+                is None, the function reads all available data in the buffer. Default to None.
 
         Returns:
             data (np.ndarray | str | None): Data specified by B2902B.set_data_format(). 
@@ -370,7 +372,13 @@ class SMU(VISA_module):
             off = ''
         else:
             off = f' {offset}'
-        flag, response = self.query_resp(f'sense{self.ch}:data{lat}?{off}', 'Getting sense data')
+        if size is not None:
+            if not (isinstance(size, int) and size > 0):
+                return f'ERROR: {self.resp} invalid size.'
+            siz = f',{size}'
+        else:
+            siz = ''
+        flag, response = self.query_resp(f'sense{self.ch}:data{lat}?{off}{siz}', 'Getting sense data')
         if flag:
             array = np.array(response.split(','), dtype=float)
             if array[0] in [9.91e+37, 9.90e+37, 9.90e-37]:

@@ -350,7 +350,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                         self.logger.debug('Sense: Trigger sent to instrument A')
                 # ACQUIRE A
                 for i in range(acquire_attempts):
-                    sense_data_A = self.A.get_sense_data(offset=self.acquired_counter)  # sense_ch1, sense_ch2
+                    sense_data_A = self.A.get_sense_data(offset=self.acquired_counter, size=10)  # sense_ch1, sense_ch2
                     self.logger.debug(f'Sense_A: acquire attempt {i}: {sense_data_A}')
                     if sense_data_A is not None:
                         break
@@ -366,7 +366,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                     return sense_data_A
                 # ACQUIRE B
                 for i in range(acquire_attempts):
-                    sense_data_B = self.B.get_sense_data(offset=self.acquired_counter)  # sense_ch1, sense_ch2
+                    sense_data_B = self.B.get_sense_data(offset=self.acquired_counter, size=10)  # sense_ch1, sense_ch2
                     self.logger.debug(f'Sense_B: acquire attempt {i}: {sense_data_B}')
                     if sense_data_B is not None:
                         flag = True
@@ -818,5 +818,4 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         self.resps.append(self.NL_smu.set_list_voltage(voltage_list=NL_seq, 
                                                        current_compliance=dir_cc,
                                                        negative_current_compliance=rev_cc))
-        # TODO check if the way we set the compliance level actually works (Add :pulse ?)
         return self._check_config_and_start('SMU_endurance')

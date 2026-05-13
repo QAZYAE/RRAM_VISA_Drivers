@@ -291,7 +291,7 @@ class ITC_probe_station(GeneralDriver):
                         return response
                 # ACQUIRE
                 for i in range(acquire_attempts):
-                    sense_data_A = self.A.get_sense_data(offset=self.acquired_counter)  # sense_ch1, sense_ch2
+                    sense_data_A = self.A.get_sense_data(offset=self.acquired_counter, size=10)  # sense_ch1, sense_ch2
                     self.logger.debug(f'Sense_A: acquire attempt {i}: {sense_data_A}')
                     if sense_data_A is not None:
                         break

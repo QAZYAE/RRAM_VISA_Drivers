@@ -434,7 +434,7 @@ class B2902B(VISA_instrument):
         return self._move_layer('trigger', channel, check_status, attempts, wait_interval)
     
     
-    def get_sense_data(self, offset: int = 0) -> Union[tuple[np.ndarray], str, None]:
+    def get_sense_data(self, offset: int = 0, size: Union[int, None] = None) -> Union[tuple[np.ndarray], str, None]:
         """Return the array data for both channels, format is specified by B2902B.set_data_format().
         The data is not cleared until the .initiate() method is executed.
 
@@ -442,6 +442,8 @@ class B2902B(VISA_instrument):
             offset (int, optional): Indicates the beginning of the data received. The index is from 
                 0 to maximum (depends on the buffer state). Defaults to 0 (All data is received).
                 If offset is `-1`, latest data entry is received.
+            size (int | None, optional): Size of the buffer to read (starting from `offset`). If `size`
+                is None, the function reads all available data in the buffer. Default to None.
 
         Returns:
             data (tuple[np.ndarray] | str | None): Data specified by B2902B.set_data_format().
@@ -454,7 +456,13 @@ class B2902B(VISA_instrument):
             off = ''
         else:
             off = f' {offset}'
-        flag, response = self.query_resp(f'sense1:data{lat}?{off};:sense2:data{lat}?{off}', 'Getting sense data')
+        if size is not None:
+            if not (isinstance(size, int) and size > 0):
+                return f'ERROR: {self.resp} invalid size.'
+            siz = f',{size}'
+        else:
+            siz = ''
+        flag, response = self.query_resp(f'sense1:data{lat}?{off}{siz};:sense2:data{lat}?{off}{siz}', 'Getting sense data')
         if flag:
             s1, s2 = response.split(';')
             arr1 = np.array(s1.split(','), dtype=float)

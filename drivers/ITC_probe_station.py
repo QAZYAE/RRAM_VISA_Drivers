@@ -684,3 +684,52 @@ class ITC_probe_station(GeneralDriver):
                                                         current_compliance=dir_cc,
                                                         negative_current_compliance=rev_cc))
         return self._check_config_and_start('SMU_endurance')
+    
+    
+    def config_pot_dep(
+            self,
+            voltage: float,
+            n_pulses: int,
+            compliance: float,
+            sign: int,
+            pulse_width: float,
+            trigger_interval: Union[float, None] = None
+        ) -> tuple[bool, str]:
+            """Configure endurance mode. WARNING: Method doesn't connect the crossbar cell, 
+            it should be connected via .connect_cell() method.
+
+            Args:
+                voltage (float): Voltage in Volts.
+                n_pulses (int): Number of pulses.
+                compliance (float): Current compliance in Amperes.
+                sign (int): 0 for Set, 1 for Reset.
+                pulse_width (float): Pulse width (seconds).
+                trigger_interval (Union[float, None]): Trigger interval, seconds (5 * pulse_width if None). Defaults to None.
+
+            Returns:
+                tuple[bool, str]: Good_config_flag (True if instruments were
+                successfully configured), response or error.
+            """
+            self._set_init_values(mode='pulse', trigger_count=n_pulses,
+                                pulse_width=pulse_width, trigger_interval=trigger_interval)
+            # Configuring triggers and source shapes
+            for smu in self.smu_list:
+                self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
+                                                        acquire_delay=0.3*self.pulse_width))
+                self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.pulse_width))
+            if self.enable_temperature:
+                self.resps.append(self.temp_smu.set_source_shape('DC'))
+            # Pulse mode for BL and NL
+                self.resps.append(self.mem_smu.set_source_shape('pulse'))
+                self.resps.append(self.mem_smu.set_pulse_config(width=self.pulse_width))
+                self.resps.append(self.mem_smu.set_measurement_range(range_type='speed'))
+            # Voltage config
+            if sign == 0:  # Set
+                voltage_list = [abs(float(voltage))] * n_pulses
+                self.read_side = 2
+            else:  # Reset
+                voltage_list = [-abs(float(voltage))] * n_pulses
+                self.read_side = 1
+            self.resps.append(self.mem_smu.set_list_voltage(voltage_list=voltage_list, 
+                                                            current_compliance=compliance))
+            return self._check_config_and_start('SMU_pot_dep')

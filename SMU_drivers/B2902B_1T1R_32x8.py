@@ -413,7 +413,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                 V_temp = sense_temp[0:len(R)*2:2]
                 Temp = K_volt2temp(V_temp, room_temp=float(self.settings['temperature']['room_temperature']))
             else:
-                V_temp, Temp = np.nan, np.nan
+                V_temp, Temp = [np.nan]*len(R), [np.nan]*len(R)
             self.logger.debug(f'Sense_data acquired: V = {V}, curr = {Curr}, R = {R}, Time={timestamp}, V_temp={V_temp}, Temp={Temp}')
             for r, t, v, cur, tem, v_t in zip(R, timestamp, V, Curr, Temp, V_temp):
                 self.queue.append((r, t, v, cur, tem, v_t))
@@ -819,3 +819,58 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                                                        current_compliance=dir_cc,
                                                        negative_current_compliance=rev_cc))
         return self._check_config_and_start('SMU_endurance')
+    
+    
+    def config_pot_dep(
+        self,
+        voltage: float,
+        n_pulses: int,
+        compliance: float,
+        sign: int,
+        pulse_width: float,
+        trigger_interval: Union[float, None] = None
+    ) -> tuple[bool, str]:
+        """Configure endurance mode. WARNING: Method doesn't connect the crossbar cell, 
+        it should be connected via .connect_cell() method.
+
+        Args:
+            voltage (float): Voltage in Volts.
+            n_pulses (int): Number of pulses.
+            compliance (float): Current compliance in Amperes.
+            sign (int): 0 for Set, 1 for Reset.
+            pulse_width (float): Pulse width (seconds).
+            trigger_interval (Union[float, None]): Trigger interval, seconds (5 * pulse_width if None). Defaults to None.
+
+        Returns:
+            tuple[bool, str]: Good_config_flag (True if instruments were
+            successfully configured), response or error.
+        """
+        self._set_init_values(mode='pulse', trigger_count=n_pulses,
+                              pulse_width=pulse_width, trigger_interval=trigger_interval)
+        # Configuring triggers and source shapes
+        for smu in self.smu_list:
+            self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
+                                                    acquire_delay=0.3*self.pulse_width))
+            self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.pulse_width))
+        for smu in self.B_smu_list:
+            self.resps.append(smu.set_source_shape('DC'))
+            self.resps.append(smu.set_arm_external(pin=self.arm_link_pin))
+        # Pulse mode for BL and NL
+        for smu in self.A_smu_list:
+            self.resps.append(smu.set_source_shape('pulse'))
+            self.resps.append(smu.set_pulse_config(width=self.pulse_width))
+            self.resps.append(smu.set_measurement_range(range_type='speed'))
+        # Voltage config
+        if sign == 0:  # Set
+            self.read_side = 2
+            NL_seq = [abs(float(voltage))] * n_pulses
+            BL_seq = [0] * n_pulses
+        else:  # Reset
+            self.read_side = 1
+            BL_seq = [abs(float(voltage))] * n_pulses
+            NL_seq = [0] * n_pulses
+        self.resps.append(self.BL_smu.set_list_voltage(voltage_list=BL_seq, 
+                                                       current_compliance=compliance))
+        self.resps.append(self.NL_smu.set_list_voltage(voltage_list=NL_seq, 
+                                                       current_compliance=compliance))
+        return self._check_config_and_start('SMU_pot_dep')

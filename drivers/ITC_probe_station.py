@@ -291,7 +291,7 @@ class ITC_probe_station(GeneralDriver):
                         return response
                 # ACQUIRE
                 for i in range(acquire_attempts):
-                    sense_data_A = self.A.get_sense_data(offset=self.acquired_counter, size=10)  # sense_ch1, sense_ch2
+                    sense_data_A = self.A.get_sense_data(channels=self.smu_channels, offset=self.acquired_counter, size=10)  # sense_ch1, sense_ch2
                     self.logger.debug(f'Sense_A: acquire attempt {i}: {sense_data_A}')
                     if sense_data_A is not None:
                         break
@@ -319,14 +319,15 @@ class ITC_probe_station(GeneralDriver):
             Curr = sense_mem[1::3]
             timestamp = self.exp_start_time + sense_mem[2::3]
             R = V / Curr
-            if R < 0: 
-                R = np.inf
+            for i in range(len(R)):
+                if R[i] < 0: 
+                    R[i] = np.inf
             # Temperature
             if self.enable_temperature:
                 V_temp = sense_temp[0::3]
                 Temp = K_volt2temp(V_temp, room_temp=float(self.settings['temperature']['room_temperature']))
             else:
-                V_temp, Temp = np.nan, np.nan  # TODO: remove
+                V_temp, Temp = [np.nan] * len(R), [np.nan] * len(R)  # TODO: remove
             self.logger.debug(f'Sense_data acquired: V = {V}, curr = {Curr}, R = {R}, Time={timestamp}, V_temp={V_temp}, Temp={Temp}')
             for r, t, v, cur, tem, v_t in zip(R, timestamp, V, Curr, Temp, V_temp):
                 self.queue.append((r, t, v, cur, tem, v_t))
@@ -720,9 +721,9 @@ class ITC_probe_station(GeneralDriver):
             if self.enable_temperature:
                 self.resps.append(self.temp_smu.set_source_shape('DC'))
             # Pulse mode for BL and NL
-                self.resps.append(self.mem_smu.set_source_shape('pulse'))
-                self.resps.append(self.mem_smu.set_pulse_config(width=self.pulse_width))
-                self.resps.append(self.mem_smu.set_measurement_range(range_type='speed'))
+            self.resps.append(self.mem_smu.set_source_shape('pulse'))
+            self.resps.append(self.mem_smu.set_pulse_config(width=self.pulse_width))
+            self.resps.append(self.mem_smu.set_measurement_range(range_type='speed'))
             # Voltage config
             if sign == 0:  # Set
                 voltage_list = [abs(float(voltage))] * n_pulses

@@ -399,9 +399,10 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             V = primary_sense[0::3]
             Curr = primary_sense[1::3]
             timestamp = self.exp_start_time + primary_sense[2::3]
-            R = V / Curr 
-            if R < 0:
-                R = np.inf
+            R = V / Curr
+            for i in range(len(R)): 
+                if R[i] < 0:
+                    R[i] = np.inf
             # Temperature and WL
             if self.settings['ITC_1T1R']['Gate_channel'] == '1':
                 # sense_gate = sense1_B

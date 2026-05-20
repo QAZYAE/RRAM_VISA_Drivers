@@ -367,12 +367,13 @@ class SMU(VISA_module):
         """
         if not isinstance(offset, int) or offset < -1:
             return f'ERROR: {self.resp} invalid offset.'
-        lat = ':latest' if offset == -1 else ''
-        if offset == 0 or offset == -1:
+        if offset == -1:
+            lat = ':latest'
             off = ''
         else:
+            lat = ''
             off = f' {offset}'
-        if size is not None:
+        if size is not None and offset != -1:
             if not (isinstance(size, int) and size > 0):
                 return f'ERROR: {self.resp} invalid size.'
             siz = f',{size}'

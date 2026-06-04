@@ -14,6 +14,7 @@ class VISA_module:
         sim (bool): True if in Simulation mode.
         module_name (str): Module name for responses.
         resp (str): Beginning of the response string.
+        command_queue (list): Command queue for the instrument.
 
     Methods:
         write(commands, stop_exception=True): Send sequence of SCPI commands to the instrument.
@@ -39,6 +40,7 @@ class VISA_module:
         """
         self.resource = resource
         self.module_name = module_name
+        self.command_queue = []
         if resource is None:
             self.sim = True
             self.resp = f'Simulation: {module_name}:'
@@ -109,7 +111,7 @@ class VISA_module:
             response = self.resource.query(command)
             return response
         except Exception as e:
-            return f'VISA ERROR:\n\tCommand: "{command}"\n\tVisaIOError: {e}'
+            return f'ERROR:\n\tCommand: "{command}"\n\tVisaIOError: {e}'
         
         
     def query_resp(self, command: str, sim_resp: str) -> tuple[bool, str]:
@@ -132,3 +134,74 @@ class VISA_module:
             return True, response
         except Exception as e:
             return False, f'ERROR: {self.resp}\n\tVISA ERROR:\n\tCommand: "{command}"\n\tVisaIOError: {e}'
+        
+        
+    # -------------------------------------------------------------
+    # Methods for queueing commands and sending them simultaniously
+    # They probably should replace other methods
+    # -------------------------------------------------------------
+        
+    def command(self, command: str, apply: bool = False) -> str:
+        """Send command to the instrument or put it in the queue.
+
+        Args:
+            command (str): SCPI command.
+            apply (bool, optional): If True, sends command immediately. If False, puts the command to 
+                the `command_queue`. The commands can be sent via `.send_queue()` method. Defaults to False.
+
+        Returns:
+            response (str): normal response if the command was sent. 'ERROR: ```error```' if 
+                an error occurred.
+        """
+        if self.sim:
+            return f'{self.resp}: command sent: {command}'
+        if apply:
+            try: 
+                self.resource.write(command)
+                return command
+            except Exception as e:
+                return f'ERROR:\n\tCommand: "{command}"\n\tVisaIOError: {e}'
+        else:
+            self.command_queue.append(command)
+            return f'Command appended to the queue: {command}'
+        
+        
+    def clear_queue(self) -> None:
+        """Clear the `command_queue`."""
+        self.command_queue = []
+        
+    
+    def send_queue(self, empty_ok: bool = False, query: bool = False, clear_queue: bool = True) -> str:
+        """Send the command queue to the instrument.
+
+        Args:
+            empty_ok (bool, optional): If True, the method does not raise error if the 
+                command list is empty. Defaults to False.
+            query (bool, optional): If True, queries the command. Defaults to False.
+            clear_queue (bool, optional): If True, clears the queue after sending. Defaults to True.
+
+        Returns:
+            response (str): Error if occured | command string for logging (commands are separated by `\\n`)
+        """
+        if self.sim:
+            res = '\n'.join(self.command_queue)
+            if clear_queue:
+                self.clear_queue()
+            return res
+        if len(self.command_queue) == 0:
+            if not empty_ok:
+                return f'ERROR: {self.resp}: command_queue is empty!'
+        if query:
+            try:
+                res = self.resource.query(';:'.join(self.command_queue))
+            except Exception as e:
+                res = f'ERROR: {self.resp}: {e}. Commands: {"\n".join(self.command_queue)}'
+        else:
+            try: 
+                self.resource.write(';:'.join(self.command_queue))
+                res = f'Commands sent: {"\n".join(self.command_queue)}'
+            except Exception as e:
+                res = f'ERROR: {self.resp}: {e}. Commands: {"\n".join(self.command_queue)}'
+        if clear_queue:
+            self.clear_queue()
+        return res

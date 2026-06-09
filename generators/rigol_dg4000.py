@@ -7,7 +7,7 @@ import pyvisa
 
 
 
-class Rigol_DG4000_generator(VISA_instrument):
+class Rigol_DG4000(VISA_instrument):
     """A driver for Rigol DG4000 Series Function/Arbitrary Waveform Generator
     
     Attributes:
@@ -16,19 +16,18 @@ class Rigol_DG4000_generator(VISA_instrument):
     def __init__(
         self, 
         resource: Union[pyvisa.Resource, None], 
-        instrument_name: str = 'B2902B'
+        instrument_name: str = 'DG4000'
     ) -> None:
-        """Handles communicating with Keysight B2902B using pyvisa.
+        """Handles communicating with Rigol DG4000 using pyvisa.
 
         Args:
-            resource (pyvisa.Resource | None): Keysight B2902B's resource
+            resource (pyvisa.Resource | None): Instrument's resource
                 (initiate using :meth:`pyvisa.highlevel.ResourceManager.open_resource`).
                 If resource is None, the program simulates communication.
-            instrument_name (str, optional): Instrument name for responses. Defaults to 'B2902B'.
+            instrument_name (str, optional): Instrument name for responses. Defaults to 'DG4000'.
         """
-        IDN_response = 'Rigol Technologies,DG4162'
+        IDN_response = 'Rigol Technologies,DG4'
         super().__init__(resource, IDN_response=IDN_response, instrument_name=instrument_name)
-        self.command_queue = []
         
         
     def set_output_state(self, state: str = 'on', channel: int = 1, apply: bool = True) -> str:
@@ -47,7 +46,7 @@ class Rigol_DG4000_generator(VISA_instrument):
             return f'ERROR: {self.resp}: wrong channel number: {channel}'
         if state not in ['on', 'off']:
             return f'ERROR: {self.resp}: wrong output state: {state}'
-        self.command(f'output{channel}:state {state}', apply=apply)
+        return self.command(f'output{channel}:state {state}', apply=apply)
         
         
     def configure_harmonic(
@@ -79,7 +78,7 @@ class Rigol_DG4000_generator(VISA_instrument):
             return f'ERROR: {self.resp}: wrong frequency: {frequency}'
         if phase < 0 or phase > 360:
             return f'ERROR: {self.resp}: wrong phase: {phase} (it should be in degrees, from 0 to 360)'
-        self.command(f'source{channel}:apply:harmonic {frequency},{amplitude},{DC_offset},{phase}', apply=apply)
+        return self.command(f'source{channel}:apply:harmonic {frequency},{amplitude},{DC_offset},{phase}', apply=apply)
         
         
     def configure_pulse(
@@ -111,7 +110,7 @@ class Rigol_DG4000_generator(VISA_instrument):
             return f'ERROR: {self.resp}: wrong frequency: {frequency}'
         if delay < 0 or delay > 1/frequency:
             return f'ERROR: {self.resp}: wrong delay: {delay} (from 0 to pulse period)'
-        self.command(f'source{channel}:apply:pulse {frequency},{amplitude},{DC_offset},{delay}', apply=apply)
+        return self.command(f'source{channel}:apply:pulse {frequency},{amplitude},{DC_offset},{delay}', apply=apply)
         
         
     def configure_sinusoid(
@@ -143,4 +142,4 @@ class Rigol_DG4000_generator(VISA_instrument):
             return f'ERROR: {self.resp}: wrong frequency: {frequency}'
         if phase < 0 or phase > 360:
             return f'ERROR: {self.resp}: wrong phase: {phase} (it should be in degrees, from 0 to 360)'
-        self.command(f'source{channel}:apply:sinusoid {frequency},{amplitude},{DC_offset},{phase}', apply=apply)
+        return self.command(f'source{channel}:apply:sinusoid {frequency},{amplitude},{DC_offset},{phase}', apply=apply)

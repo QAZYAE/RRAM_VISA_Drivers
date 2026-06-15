@@ -26,5 +26,5 @@ class Rigol_MSO8000(VISA_instrument):
                 If resource is None, the program simulates communication.
             instrument_name (str, optional): Instrument name for responses. Defaults to 'MSO8000'.
         """
-        IDN_response = 'Rigol Technologies,MSO8'
+        IDN_response = 'RIGOL TECHNOLOGIES,MSO8'
         super().__init__(resource, IDN_response=IDN_response, instrument_name=instrument_name)

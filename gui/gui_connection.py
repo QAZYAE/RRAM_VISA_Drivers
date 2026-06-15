@@ -138,3 +138,33 @@ def check_connection_34980A(visa_address: str, visa_library_path: str = '') -> t
             Second item is the instrument response.
     """
     return check_VISA_connection(visa_address, 'Agilent Technologies,34980A,', visa_library_path)
+
+
+def check_connection_Rigol_DG4000(visa_address: str, visa_library_path: str = '') -> tuple[int, str]:
+    """Check connection with Rigol DG4000 Generator.
+
+    Args:
+        visa_address (str): Visa Address.
+        visa_library_path (str): Path to visa library. Defaults to ''.
+
+    Returns:
+        (flag, response) (tuple[int, str]): First item is a flag: 0 if connection error, 1 if connected, 
+            but the instrument is wrong, 2 if connected and the instrument is right. 
+            Second item is the instrument response.
+    """
+    return check_VISA_connection(visa_address, 'Rigol Technologies,DG4', visa_library_path)
+
+
+def check_connection_Rigol_MSO8000(visa_address: str, visa_library_path: str = '') -> tuple[int, str]:
+    """Check connection with Rigol MSO8000 Oscilloscope.
+
+    Args:
+        visa_address (str): Visa Address.
+        visa_library_path (str): Path to visa library. Defaults to ''.
+
+    Returns:
+        (flag, response) (tuple[int, str]): First item is a flag: 0 if connection error, 1 if connected, 
+            but the instrument is wrong, 2 if connected and the instrument is right. 
+            Second item is the instrument response.
+    """
+    return check_VISA_connection(visa_address, 'RIGOL TECHNOLOGIES,MSO8', visa_library_path)

@@ -5,7 +5,7 @@ from RRAM_VISA_Drivers.core import VISA_instrument
 from typing import Union
 import pyvisa
 import numpy as np
-
+import time #TODO remove
 
 
 class Rigol_MSO8000(VISA_instrument):
@@ -31,19 +31,20 @@ class Rigol_MSO8000(VISA_instrument):
         super().__init__(resource, IDN_response=IDN_response, instrument_name=instrument_name)
     
 
-    def fetch_waveform(self, channel: int = 1, form: str = 'ascii', mode: str = 'norm', apply: bool = True):
-
-        """ Fetch data from oscilloscope screen
+    def fetch_waveform(self, channel: str = '1', form: str = 'ascii', mode: str = 'norm', apply: bool = True) -> str:
+        """Fetch data from oscilloscope screen
 
         Args:
             channel (str, optional): Channel from which the waveform will be read: '1' | '2' | '3' | '4'.
-            form (str, optional): {WORD|BYTE|ASCii}
-            mode (str, optional): {NORMal|MAXimum|RAW}
+                Defaults to '1'.
+            form (str, optional): WORD|BYTE|ASCii. Defaults to 'ascii'.
+            mode (str, optional): NORMal|MAXimum|RAW. Defaults to 'norm'.
             apply (bool, optional): If True, the command is sent to the instrument immediately. If False,
-            the command is appended to the `command_queue` and can be sent with `.send_queue()` method.
+                the command is appended to the `command_queue` and can be sent with `.send_queue()` method.
+                Defaults to True.
 
         Returns:
-            data (lst): raw data from the oscilloscope | error if an error occurred.
+            data (list[str]): raw data from the oscilloscope | error if an error occurred.
         """
 
         if str(channel) not in ['1', '2', '3', '4']:
@@ -55,20 +56,15 @@ class Rigol_MSO8000(VISA_instrument):
         return self.query('wav:data?')
 
 
-    def parse_waveform(self, rawdata, xorigin: bool = True):
-
-
+    def parse_waveform(self, rawdata, xorigin: bool = False):
         """ Parse fetched data in ASCII
 
         Args:
-            rawdata (lst): raw data from the oscilloscope in ASCII format
-            channel (str, optional): Channel from which the waveform will be read: '1' | '2' | '3' | '4'.
-            apply (bool, optional): If True, the command is sent to the instrument immediately. If False,
-            the command is appended to the `command_queue` and can be sent with `.send_queue()` method.
+            rawdata (list[str]): raw data from the oscilloscope in ASCII format
+            xorigin (bool): If True, the start time of the waveform data will be used. Defaults to False.
 
         Returns:
-            time (numpy array): data in the X direction
-            data (lst): waveform from the oscilloscope | error if an error occurred.
+            time, data (tuple[np.ndarray, list]): data in the X direction; waveform from the oscilloscope | error if an error occurred.
         """
                 
         n_bytes = int(rawdata[2:11])
@@ -85,74 +81,96 @@ class Rigol_MSO8000(VISA_instrument):
 
 
     def auto_scale(self, apply: bool = True):
-
-        """ Enable the waveform auto setting function. The oscilloscope will automatically adjust the
-            vertical scale, horizontal time base, and trigger mode according to the input signal to
-            realize optimal waveform display.
+        """Enable the waveform auto setting function. The oscilloscope will automatically adjust the vertical 
+        scale, horizontal time base, and trigger mode according to the input signal to realize optimal waveform display.
 
         Args:
             apply (bool, optional): If True, the command is sent to the instrument immediately. If False,
-            the command is appended to the `command_queue` and can be sent with `.send_queue()` method.
+                the command is appended to the `command_queue` and can be sent with `.send_queue()` method.
+                Defaults to True.
+
+        Returns:
+            response (str): Command response | error if an error occurred.
         """
         return self.command('aut', apply=apply)
     
 
     def run(self, apply: bool = True):
-
         """ Start the oscilloscope.
         
         Args:
             apply (bool, optional): If True, the command is sent to the instrument immediately. If False,
-            the command is appended to the `command_queue` and can be sent with `.send_queue()` method.
+                the command is appended to the `command_queue` and can be sent with `.send_queue()` method.
+                Defaults to True.
+                        
+        Returns:
+            response (str): Command response | error if an error occurred.
         """
         return self.command('run', apply=apply)
     
 
     def stop(self, apply: bool = True):
-
-        """ Stop the oscilloscope.
+        """Stop the oscilloscope.
 
         Args:
             apply (bool, optional): If True, the command is sent to the instrument immediately. If False,
-            the command is appended to the `command_queue` and can be sent with `.send_queue()` method.
+                the command is appended to the `command_queue` and can be sent with `.send_queue()` method.
+                Defaults to True.
+
+        Returns:
+            response (str): Command response | error if an error occurred.
         """
         return self.command('stop', apply=apply)
     
 
     def single(self, apply: bool = True):
-
         """ Set the trigger mode of the oscilloscope to "Single".
 
         Args:
             apply (bool, optional): If True, the command is sent to the instrument immediately. If False,
-            the command is appended to the `command_queue` and can be sent with `.send_queue()` method.
+                the command is appended to the `command_queue` and can be sent with `.send_queue()` method.
+                Defaults to True.
+                        
+        Returns:
+            response (str): Command response | error if an error occurred.
         """
         return self.command('sing', apply=apply)
     
 
-    def measure_amplitude(self, channel: int = 1):
-
+    def measure_amplitude(self, channel: str = '1'):
         """ Measure aplitude of the signal on channel.
 
         Args:
-            channel (int): channel number on which the amplitude of the signal will be measured.
+            channel (str): channel number on which the amplitude of the signal will be measured. Defaults to '1'.
 
         Returns:
             amplitude (float)
         """
         if str(channel) not in ['1', '2', '3', '4']:
             return f'ERROR: {self.resp}: wrong channel number: {channel}'
-        
         return float(self.query(f'meas:stat:item? aver,vpp,chan{channel}'))
     
 
-    def measure_phase_difference(self, channel: int = 1, ref_channel: int = 2):
+    def measure_frequency(self, channel: str = '1'):
+        """ Measure frequency of the signal on channel.
 
+        Args:
+            channel (str): channel number on which the frequency of the signal will be measured. Defaults to '1'.
+
+        Returns:
+            frequency (float)
+        """
+        if str(channel) not in ['1', '2', '3', '4']:
+            return f'ERROR: {self.resp}: wrong channel number: {channel}'
+        return float(self.query(f'meas:stat:item? aver,freq,chan{channel}'))
+
+
+    def measure_phase_difference(self, channel: str = '1', ref_channel: str = '2'):
         """ Measure phase difference between signals on channel and ref_channel.
 
         Args:
-            channel (int): channel number on which the phase of the signal will be measured.
-            ref_channel (int): chanel number with reference signal.
+            channel (str): channel number on which the phase of the signal will be measured. Defaults to '1'.
+            ref_channel (str): chanel number with reference signal. Defaults to '2'.
 
         Returns:
             amplitude (float)
@@ -167,15 +185,18 @@ class Rigol_MSO8000(VISA_instrument):
         return float(self.query(f'meas:stat:item? aver,rrdelay,chan{channel},chan{ref_channel}'))
 
 
-    def display_channels(self, channels: list = [1, 2], apply=True):
-        
-        """ Turns on specified channels and turns off the remaining channels.
+    def display_channels(self, channels: list = ['1', '2'], apply: bool = True):
+        """Turns on specified channels and turns off the remaining channels.
 
         Args:
-            channels (list): channels that need to be displayed: ['1', '2', '3', '4']
-            if channels is an empty list, all of the channels will be turned off.
-            apply (bool, optional): If True, the command is sent to the instrument immediately. If False,
-            the command is appended to the `command_queue` and can be sent with `.send_queue()` method.
+            channels (list[str], optional): channels (list): channels that need to be displayed: ['1', '2', '3', '4']. 
+                If channels is an empty list, all of the channels will be turned off.. Defaults to [1, 2].
+            apply (bool, optional): If True, the command is sent to the instrument immediately. 
+                If False, the command is appended to the `command_queue` and can be sent with `.send_queue()` method.
+                Defaults to True.
+
+        Returns:
+            response (str): Command response | error if an error occurred.
         """
         off_channels = ['1', '2', '3', '4']
 
@@ -187,4 +208,42 @@ class Rigol_MSO8000(VISA_instrument):
 
         for channel in off_channels:
             self.command(f'chan{channel}:disp 0', apply=apply)
+
+    def wait_operation_complete(self):
+        """Wait until the current operation is finished.
+        """
+        while self.query('*opc?') != '1\n':
+            time.sleep(0.1) #TODO change to Qt timer
+            pass
+
+    def beep(self):
+        """ Beeper.
+                    
+        Returns:
+            response (str): Command response | error if an error occurred.
+        """
+        self.command('syst:beep 1')
+
+    def set_xscale(self, freq: Union[float, None] = None, apply: bool = True):
+        """Sets the scale of the main time base so the two periods of waveform fit on the oscilloscope's screen.
+
+        Args:
+            freq (Union[float, None], optional): frequency of the signal. If freq > 40 MHz scale sets to 5e-9 s. 
+                If freq < 0.2 mHz scale sets to 1e3 s. If freq is None auto setting function will be enabled. Defaults to None.
+            apply (bool, optional): If True, the command is sent to the instrument immediately. 
+                If False, the command is appended to the `command_queue` and can be sent with `.send_queue()` method.
+                Defaults to True.
+
+        Returns:
+            response (str): Command response | error if an error occurred.
+        """
+        if freq is None:
+            return self.auto_scale()
+        elif freq < 2e-4:
+            return self.command(f'tim:main:scale {1e3}', apply=apply)
+        elif freq > 4e7:
+            return self.command(f'tim:main:scale {5e-9}', apply=apply)
+        else:
+            return self.command(f'tim:main:scale {0.2/freq}', apply=apply)
+        
 

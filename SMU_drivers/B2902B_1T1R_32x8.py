@@ -350,7 +350,8 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                         self.logger.debug('Sense: Trigger sent to instrument A')
                 # ACQUIRE A
                 for i in range(acquire_attempts):
-                    sense_data_A = self.A.get_sense_data(offset=self.acquired_counter, size=10)  # sense_ch1, sense_ch2
+                    sense_data_A = self.A.get_sense_data(offset=self.acquired_counter, size=10, 
+                                                         channels=self.A_smu_channels)  # sense_ch1, sense_ch2
                     self.logger.debug(f'Sense_A: acquire attempt {i}: {sense_data_A}')
                     if sense_data_A is not None:
                         break
@@ -366,12 +367,13 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                     return sense_data_A
                 # ACQUIRE B
                 for i in range(acquire_attempts):
-                    sense_data_B = self.B.get_sense_data(offset=self.acquired_counter, size=10)  # sense_ch1, sense_ch2
+                    sense_data_B = self.B.get_sense_data(offset=self.acquired_counter, size=10, 
+                                                         channels=self.B_smu_channels)  # sense_ch1, sense_ch2
                     self.logger.debug(f'Sense_B: acquire attempt {i}: {sense_data_B}')
                     if sense_data_B is not None:
                         flag = True
                         for channel in list(map(int, self.B_smu_channels.split(','))):
-                            if not len(sense_data_A[channel])/3*2 <= len(sense_data_B[channel]):  # At least equal amount of data acquired
+                            if not len(sense_data_A[channel-1])/3*2 <= len(sense_data_B[channel-1]):  # At least equal amount of data acquired
                                 flag = False
                         if flag:
                             break
@@ -445,8 +447,8 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             return False, f'.trigger(): B is not armed! B status: {resp}'
         resp = self.A.trigger(channel=self.A_smu_channels)  # Trigger A
         if resp.startswith('ERROR'):
-            self.logger.error(f'.sense(): A trigger error: {resp}')
-            return False, f'.sense(): A trigger error: {resp}'
+            self.logger.error(f'.trigger(): A trigger error: {resp}')
+            return False, f'.trigger(): A trigger error: {resp}'
         self.logger.debug('.trigger(): trigger sent to instrument A')
         self.acquired_counter += 1
         return True, 'Trigger was sent to the instruments'

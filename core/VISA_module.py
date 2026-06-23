@@ -3,6 +3,7 @@ VISA module class
 """
 import pyvisa
 from typing import Union
+import logging
 
 
 
@@ -14,6 +15,7 @@ class VISA_module:
         sim (bool): True if in Simulation mode.
         module_name (str): Module name for responses.
         resp (str): Beginning of the response string.
+        scpi_logger (logging.Logger | None): Logger for SCPI commands.
 
     Methods:
         write(commands, stop_exception=True): Send sequence of SCPI commands to the instrument.
@@ -27,7 +29,8 @@ class VISA_module:
     def __init__(
         self, 
         resource: Union[pyvisa.Resource, None], 
-        module_name: str = 'Module'
+        module_name: str = 'Module',
+        scpi_logger: Union[logging.Logger, None] = None
     ) -> None:
         """General class for VISA instruments or modules. Write and query methods are implemented
 
@@ -39,12 +42,23 @@ class VISA_module:
         """
         self.resource = resource
         self.module_name = module_name
+        self.scpi_logger = scpi_logger
         if resource is None:
             self.sim = True
             self.resp = f'Simulation: {module_name}:'
         else:
             self.sim = False
             self.resp = f'{module_name}:'
+            
+            
+    def log_write(self, command: str) -> None:
+        """Log the SCPI command sent via .write().
+
+        Args:
+            command (str): SCPI command
+        """
+        if self.scpi_logger is not None:
+            self.scpi_logger.info(f'{self.resp}: WRITE: {command}')
             
             
     def write(self, commands: Union[list, str], stop_exception: bool = True) -> list:
@@ -66,9 +80,11 @@ class VISA_module:
         for command in commands:
             try:
                 self.resource.write(command)
+                self.log_write(command)
                 executed.append(command)
             except Exception as e:
                 executed.append(f'VISA ERROR:\n\tCommand: "{command}"\n\tVisaIOError: {e}')
+                self.log_write(f'ERROR: COMMAND {command}\n{type(e).__name__}: {e}')
                 if stop_exception:
                     return executed
         return executed
@@ -89,8 +105,10 @@ class VISA_module:
             return f'{self.resp} {normal_response}'
         try:
             self.resource.write(command)
+            self.log_write(f'{command}; PURPOSE: {normal_response}')
             return f'{self.resp} {normal_response}'
         except Exception as e:
+            # TODO logger
             return f'ERROR: {self.resp}\n\tVISA ERROR:\n\tCommand: "{command}"\n\tVisaIOError: {e}'
     
     

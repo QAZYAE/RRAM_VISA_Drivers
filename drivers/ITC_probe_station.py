@@ -31,6 +31,7 @@ class ITC_probe_station(GeneralDriver):
         acquired_counter (int): Number of resistances acquired via sense(). Resets on config or clear.
         need_stop (bool): Flag that can be set to True for GUI. Used if the driver is stuck in
             acquire loop and user wants to stop the experiment.
+        sense_size (int | None): Size of data to read from the instrument's buffer in .sense().
         queue (list): Results queue that fills while reading the data from instruments.
         sim (str): True for simulation mode.
         enable_temperature (bool): If True, temperature measurement is enabled.
@@ -41,6 +42,7 @@ class ITC_probe_station(GeneralDriver):
     trigger_count: int = 0
     acquired_counter: int = 0
     need_stop: bool = False
+    sense_size: Union[int, None] = None
     queue: list = []
     sim: str = False
     enable_temperature: bool
@@ -291,7 +293,7 @@ class ITC_probe_station(GeneralDriver):
                         return response
                 # ACQUIRE
                 for i in range(acquire_attempts):
-                    sense_data_A = self.A.get_sense_data(channels=self.smu_channels, offset=self.acquired_counter, size=10)  # sense_ch1, sense_ch2
+                    sense_data_A = self.A.get_sense_data(channels=self.smu_channels, offset=self.acquired_counter, size=self.sense_size)  # sense_ch1, sense_ch2
                     self.logger.debug(f'Sense_A: acquire attempt {i}: {sense_data_A}')
                     if sense_data_A is not None:
                         break
@@ -332,6 +334,12 @@ class ITC_probe_station(GeneralDriver):
             for r, t, v, cur, tem, v_t in zip(R, timestamp, V, Curr, Temp, V_temp):
                 self.queue.append((r, t, v, cur, tem, v_t))
             self.acquired_counter += min(len(R), len(Temp))
+            # Checking if to much data is read on each .sense()
+            if min(len(R), len(Temp)) > 20:
+                self.sense_size = 20  # Limiting the read size till the end of the experiment
+            # Checking if reading data is finished
+            if self.trigger_count - self.acquired_counter <= 20:
+                self.sense_size = None
         try:
             self.logger.debug(f'ACQUIRED COUNTER (AFT): {self.acquired_counter}')
             data_to_send = self.queue.pop(0)
@@ -396,6 +404,7 @@ class ITC_probe_station(GeneralDriver):
         self.trigger_count = trigger_count
         self.acquired_counter = 0
         self.need_stop = False
+        self.sense_size = None
         self.queue = []
         self.resps = []  # Response list
         # Clearing

@@ -32,6 +32,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         read_side (int): SMU to read current from when using .sense(): 1 for BL, or 2 for NL.
         need_stop (bool): Flag that can be set to True for GUI. Used if the driver is stuck in 
             acquire loop and user wants to stop the experiment.
+        sense_size (int | None): Size of data to read from the instrument's buffer in .sense().
         queue (list): Results queue that fills while reading the data from instruments.
         sim (str): True for simulation mode.
         enable_temperature (bool): If True, temperature measurement is enabled.
@@ -46,6 +47,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
     acquired_counter: int = 0
     read_side: int = 1
     need_stop: bool = False
+    sense_size: Union[int, None] = None
     queue: list = []
     sim: str = False
     enable_temperature: bool
@@ -350,7 +352,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                         self.logger.debug('Sense: Trigger sent to instrument A')
                 # ACQUIRE A
                 for i in range(acquire_attempts):
-                    sense_data_A = self.A.get_sense_data(offset=self.acquired_counter, size=10, 
+                    sense_data_A = self.A.get_sense_data(offset=self.acquired_counter, size=self.sense_size, 
                                                          channels=self.A_smu_channels)  # sense_ch1, sense_ch2
                     self.logger.debug(f'Sense_A: acquire attempt {i}: {sense_data_A}')
                     if sense_data_A is not None:
@@ -367,7 +369,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                     return sense_data_A
                 # ACQUIRE B
                 for i in range(acquire_attempts):
-                    sense_data_B = self.B.get_sense_data(offset=self.acquired_counter, size=10, 
+                    sense_data_B = self.B.get_sense_data(offset=self.acquired_counter, size=self.sense_size, 
                                                          channels=self.B_smu_channels)  # sense_ch1, sense_ch2
                     self.logger.debug(f'Sense_B: acquire attempt {i}: {sense_data_B}')
                     if sense_data_B is not None:
@@ -421,6 +423,12 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             for r, t, v, cur, tem, v_t in zip(R, timestamp, V, Curr, Temp, V_temp):
                 self.queue.append((r, t, v, cur, tem, v_t))
             self.acquired_counter += len(R)
+            # Checking if to much data is read on each .sense()
+            if len(R) > 20:
+                self.sense_size = 20  # Limiting the read size till the end of the experiment
+            # Checking if reading data is finished
+            if self.trigger_count - self.acquired_counter <= 20:
+                self.sense_size = None
         try:
             self.logger.debug(f'ACQUIRED COUNTER (AFT): {self.acquired_counter}')
             data_to_send = self.queue.pop(0)
@@ -478,6 +486,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         self.trigger_count = trigger_count
         self.acquired_counter = 0
         self.need_stop = False
+        self.sense_size = None
         self.queue = []
         self.resps = []  # Response list
         # Clearing

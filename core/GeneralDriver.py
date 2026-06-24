@@ -34,13 +34,15 @@ class GeneralDriver:
         self.logger = self.create_logger(
             path=self.log_path,
             clear_on_start=eval(self.settings['logger']['clear_on_start']),
-            logging_level=self.settings['logger']['level']
+            logging_level=self.settings['logger']['level'],
+            logger_name='Driver'
         )
         if eval(self.settings['logger']['scpi_log']):
             self.scpi_logger = self.create_logger(
                 path=self.scpi_log_path,
                 clear_on_start=eval(self.settings['logger']['clear_on_start']),
-                logging_level='DEBUG'
+                logging_level='DEBUG',
+                logger_name='SCPI'
             )
         else:
             self.scpi_logger = None
@@ -60,7 +62,7 @@ class GeneralDriver:
             self.set_logging_level(self.settings['logger']['level'])
             
             
-    def create_logger(self, path: str, clear_on_start: bool, logging_level: str) -> logging.Logger:
+    def create_logger(self, path: str, clear_on_start: bool, logging_level: str, logger_name: str) -> logging.Logger:
         """Create a logger
 
         Args:
@@ -76,7 +78,7 @@ class GeneralDriver:
                 os.remove(path)
             if os.path.isfile(path + '.1'):
                 os.remove(path + '.1')
-        logger = logging.getLogger('Driver')
+        logger = logging.getLogger(logger_name)
         logger.setLevel(logging_level.strip().upper())
         handler = RotatingFileHandler(
             path, 

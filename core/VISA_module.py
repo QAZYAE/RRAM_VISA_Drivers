@@ -61,9 +61,9 @@ class VISA_module:
         """
         if self.scpi_logger is not None:
             if error:
-                self.scpi_logger.error(f'{self.resp}: WRITE: {command}')
+                self.scpi_logger.error(f'{self.resp} WRITE: {command}')
             else:
-                self.scpi_logger.info(f'{self.resp}: WRITE: {command}')
+                self.scpi_logger.info(f'{self.resp} WRITE: {command}')
             
             
     def log_query(self, command: str, response: str, error: bool = False) -> None:
@@ -76,9 +76,9 @@ class VISA_module:
         """
         if self.scpi_logger is not None:
             if error:
-                self.scpi_logger.error(f'{self.resp}: QUERY: {command}\nERROR: {response}')
+                self.scpi_logger.error(f'{self.resp} QUERY: {command}\nERROR: {response}')
             else:
-                self.scpi_logger.info(f'{self.resp}: QUERY: {command}\nRESPONSE: {response}')
+                self.scpi_logger.info(f'{self.resp} QUERY: {command}\nRESPONSE: {response}')
             
             
     def write(self, commands: Union[list, str], stop_exception: bool = True) -> list:

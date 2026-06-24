@@ -76,7 +76,7 @@ class ITC_probe_station(GeneralDriver):
                 self.rm = pyvisa.ResourceManager(VISA_library_path)
             # Opening resources
             A_res = self.rm.open_resource(B2902B_address)
-        self.A = B2902B(resource=A_res, instrument_name='B2902B')
+        self.A = B2902B(resource=A_res, instrument_name='B2902B', scpi_logger=self.scpi_logger)
         # Config
         self.enable_temperature = eval(self.settings['ITC_probe_station']['Measure_temperature'])
         if self.settings['ITC_probe_station']['Memristor_channel'] == '1':

@@ -4,6 +4,7 @@ VISA instrument class
 import pyvisa
 from typing import Union
 from RRAM_VISA_Drivers.core import VISA_module
+import logging
         
         
         
@@ -34,7 +35,8 @@ class VISA_instrument(VISA_module):
         self, 
         resource: Union[pyvisa.Resource, None], 
         IDN_response: str, 
-        instrument_name: str = 'Instrument'
+        instrument_name: str = 'Instrument',
+        scpi_logger: Union[logging.Logger, None] = None
     ) -> None:
         """General class for VISA instruments.
 
@@ -43,9 +45,10 @@ class VISA_instrument(VISA_module):
                 (initiate using :meth:`pyvisa.highlevel.ResourceManager.open_resource`).
                 If resource is None, the program simulates communication.
             IDN_response (str): Instrument response for IDN command (for validation).
+            scpi_logger (logging.Logger | None, optional): Logger for scpi commands. Defaults to None.
         """
         self.instrument_name = instrument_name
-        super().__init__(resource, instrument_name)
+        super().__init__(resource, instrument_name, scpi_logger)
         self.IDN_response: str = IDN_response
         
         
@@ -120,6 +123,8 @@ class VISA_instrument(VISA_module):
             return 'Simulation: Instrument was cleared.'
         try:
             self.resource.clear()
+            self.log_write('VISA .clear() method sent')
             return 'The instrument was cleared'
         except Exception as e:
+            self.log_write(f'VISA .clear() method\nERROR: {type(e).__name__}: {e}', error=True)
             return f'ERROR:\n\tCommand: "resource.clear()"\n\tVisaIOError: {e}'

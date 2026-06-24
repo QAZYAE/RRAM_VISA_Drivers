@@ -5,6 +5,7 @@ import pyvisa
 from typing import Union
 import numpy as np
 from numpy.typing import ArrayLike
+import logging
 from RRAM_VISA_Drivers.core import VISA_module
 
 
@@ -21,7 +22,8 @@ class SMU(VISA_module):
         resource: Union[pyvisa.Resource, None], 
         channel: int, 
         instrument_name: str = 'Instrument',
-        parent = None
+        parent = None,
+        scpi_logger: Union[logging.Logger, None] = None
     ) -> None:
         """Handles communicating with an SMU (Source-Measure Unit) on a Keysight instrument.
 
@@ -32,6 +34,7 @@ class SMU(VISA_module):
             channel (int): Channel number on the instrument mainframe.
             instrument_name (str, optional): Instrument name for responses. Defaults to 'Instrument'.
             parent (B2902B): Parent instrument class.
+            scpi_logger (logging.Logger | None, optional): Logger for scpi commands. Defaults to None.
         """
         self.parent = parent
         if channel < 1 or channel > 8:
@@ -39,7 +42,7 @@ class SMU(VISA_module):
         self.ch = channel
         self.inst_name = instrument_name
         self.smu_mode = 'voltage'
-        super().__init__(resource, module_name=f'{self.inst_name}, channel {self.ch}')
+        super().__init__(resource, module_name=f'{self.inst_name}, channel {self.ch}', scpi_logger=scpi_logger)
         
         
     def set_output_state(self, state: str) -> None:

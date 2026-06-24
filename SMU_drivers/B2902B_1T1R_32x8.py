@@ -76,8 +76,8 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         super().__init__()
         self.sim = sim
         # Creating driver instances for the instruments
-        self.A = B2902B(resource=B2902B_A_res, instrument_name='B2902B_A')  # Controls BL and NL
-        self.B = B2902B(resource=B2902B_B_res, instrument_name='B2902B_B')  # Controls WL
+        self.A = B2902B(resource=B2902B_A_res, instrument_name='B2902B_A', scpi_logger=self.scpi_logger)  # Controls BL and NL
+        self.B = B2902B(resource=B2902B_B_res, instrument_name='B2902B_B', scpi_logger=self.scpi_logger)  # Controls WL
         # Config
         self.enable_temperature = eval(self.settings['ITC_1T1R']['Measure_temperature'])
         if self.settings['ITC_1T1R']['Gate_channel'] == '1':

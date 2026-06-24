@@ -5,6 +5,7 @@ import pyvisa
 import time
 from typing import Union
 import numpy as np
+import logging
 from RRAM_VISA_Drivers.core import VISA_instrument
 from RRAM_VISA_Drivers.SMU_drivers.Keysight_SMU import SMU
 
@@ -23,7 +24,8 @@ class B2902B(VISA_instrument):
     def __init__(
         self, 
         resource: Union[pyvisa.Resource, None], 
-        instrument_name: str = 'B2902B'
+        instrument_name: str = 'B2902B',
+        scpi_logger: Union[logging.Logger, None] = None
     ) -> None:
         """Handles communicating with Keysight B2902B using pyvisa.
 
@@ -32,11 +34,12 @@ class B2902B(VISA_instrument):
                 (initiate using :meth:`pyvisa.highlevel.ResourceManager.open_resource`).
                 If resource is None, the program simulates communication.
             instrument_name (str, optional): Instrument name for responses. Defaults to 'B2902B'.
+            scpi_logger (logging.Logger | None, optional): Logger for scpi commands. Defaults to None.
         """
         IDN_response = 'Keysight Technologies,B2902B'
-        super().__init__(resource, IDN_response=IDN_response, instrument_name=instrument_name)
-        self.SMU1 = SMU(resource, channel=1, instrument_name=instrument_name, parent=self)
-        self.SMU2 = SMU(resource, channel=2, instrument_name=instrument_name, parent=self)
+        super().__init__(resource, IDN_response=IDN_response, instrument_name=instrument_name, scpi_logger=scpi_logger)
+        self.SMU1 = SMU(resource, channel=1, instrument_name=instrument_name, parent=self, scpi_logger=scpi_logger)
+        self.SMU2 = SMU(resource, channel=2, instrument_name=instrument_name, parent=self, scpi_logger=scpi_logger)
         
         
     def set_output_state(self, state: str) -> str:

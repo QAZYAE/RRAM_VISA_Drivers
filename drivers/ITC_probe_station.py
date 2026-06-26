@@ -322,7 +322,7 @@ class ITC_probe_station(GeneralDriver):
             timestamp = self.exp_start_time + sense_mem[2::3]
             R = V / Curr
             for i in range(len(R)):
-                if R[i] < 0: 
+                if R[i] < 0 or np.isnan(R[i]): 
                     R[i] = np.inf
             # Temperature
             if self.enable_temperature:

@@ -350,10 +350,15 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                         return f'.sense(): A trigger error: {resp}'
                     else:
                         self.logger.debug('Sense: Trigger sent to instrument A')
+                # ACQUIRE
+                if self._read_sides[self.read_side] == 1:
+                    primary_channel = '1'
+                else:
+                    primary_channel = '2'
                 # ACQUIRE A
                 for i in range(acquire_attempts):
                     sense_data_A = self.A.get_sense_data(offset=self.acquired_counter, size=self.sense_size, 
-                                                         channels=self.A_smu_channels)  # sense_ch1, sense_ch2
+                                                         channels=primary_channel)  # sense_ch1, sense_ch2
                     self.logger.debug(f'Sense_A: acquire attempt {i}: {sense_data_A}')
                     if sense_data_A is not None:
                         break
@@ -407,7 +412,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             timestamp = self.exp_start_time + primary_sense[2::3]
             R = V / Curr
             for i in range(len(R)): 
-                if R[i] < 0:
+                if R[i] < 0 or np.isnan(R[i]):
                     R[i] = np.inf
             # Temperature and WL
             if self.settings['ITC_1T1R']['Gate_channel'] == '1':

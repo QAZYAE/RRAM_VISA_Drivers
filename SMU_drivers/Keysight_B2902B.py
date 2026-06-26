@@ -494,7 +494,7 @@ class B2902B(VISA_instrument):
                 arr = np.array(response.split(','), dtype=float)
                 if arr[0] in [9.91e+37, 9.90e+37, 9.90e-37]:
                     return None
-                if str(channels == '1'):
+                if str(channels) == '1':
                     return arr, []
                 else:
                     return [], arr

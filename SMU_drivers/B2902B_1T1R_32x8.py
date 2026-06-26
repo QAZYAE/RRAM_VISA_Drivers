@@ -363,6 +363,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                     time.sleep(sleep_time)
                 if sense_data_A is None:
                     self.logger.error('Cant obtain sense_A data!')
+                    self.logger.error(f'Sense A data (no arguments): {self.A.query(":sense1:data?;:sense2:data?")}')
                     return 'Cant obtain sense_A data!'
                 if isinstance(sense_data_A, str):
                     self.logger.error(f'Sense_A acquire error: {sense_data_A}')
@@ -385,6 +386,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                     time.sleep(sleep_time)
                 if sense_data_B is None:
                     self.logger.error('Cant obtain sense_B data!')
+                    self.logger.error(f'Sense B data (no arguments): {self.B.query(":sense1:data?;:sense2:data?")}')
                     return 'Cant obtain sense_B data!'
                 if isinstance(sense_data_B, str):
                     self.logger.error(f'Sense_B acquire error: {sense_data_B}')

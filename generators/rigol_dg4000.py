@@ -142,7 +142,9 @@ class Rigol_DG4000(VISA_instrument):
             return f'ERROR: {self.resp}: wrong frequency: {frequency}'
         if phase < 0 or phase > 360:
             return f'ERROR: {self.resp}: wrong phase: {phase} (it should be in degrees, from 0 to 360)'
-        return self.command(f'source{channel}:apply:sinusoid {frequency},{amplitude},{DC_offset},{phase}', apply=apply)
+        self.command(f'source{channel}:apply:sinusoid {frequency},{amplitude},{DC_offset},{phase}', apply=apply)
+        self.command(f'source{channel}:phase:adjust {phase}', apply=apply)
+        return self.command(f'source{channel}:phase:init', apply=apply)
     
 
     def query_apply(self, frequency: float, channel: int = 1):

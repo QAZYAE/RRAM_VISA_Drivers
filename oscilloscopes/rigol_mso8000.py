@@ -148,7 +148,7 @@ class Rigol_MSO8000(VISA_instrument):
         """
         if str(channel) not in ['1', '2', '3', '4']:
             return f'ERROR: {self.resp}: wrong channel number: {channel}'
-        return float(self.query(f'meas:stat:item? curr,vpp,chan{channel}'))
+        return float(self.query(f'meas:stat:item? aver,vpp,chan{channel}'))
     
 
     def measure_frequency(self, channel: str = '1'):
@@ -182,7 +182,7 @@ class Rigol_MSO8000(VISA_instrument):
         if str(ref_channel) == str(channel):
             return f'ERROR: {self.resp}: channel number and reference channel number can`t be the same'
         
-        return float(self.query(f'meas:stat:item? curr,rrphase,chan{channel},chan{ref_channel}'))
+        return float(self.query(f'meas:stat:item? aver,rrphase,chan{channel},chan{ref_channel}'))
 
 
     def display_channels(self, channels: list = ['1', '2'], apply: bool = True):
@@ -247,3 +247,15 @@ class Rigol_MSO8000(VISA_instrument):
             return self.command(f'tim:main:scale {0.2/freq}', apply=apply)
         
 
+    def clear_statistics(self, apply: bool = True):
+        """Clear statistical data from oscilloscope cash.
+
+        Args:
+            apply (bool, optional): If True, the command is sent to the instrument immediately. 
+                If False, the command is appended to the `command_queue` and can be sent with `.send_queue()` method.
+                Defaults to True.
+
+        Returns:
+            response (str): Command response | error if an error occurred.
+        """
+        return self.command('meas:stat:res', apply=apply)

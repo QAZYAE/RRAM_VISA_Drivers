@@ -195,13 +195,16 @@ class VISA_module:
             try:
                 res = self.resource.query(';:'.join(self.command_queue))
             except Exception as e:
-                res = f'ERROR: {self.resp}: {e}. Commands: {"\n".join(self.command_queue)}'
+                comm_queue = "\n".join(self.command_queue)
+                res = f'ERROR: {self.resp}: {e}. Commands: {comm_queue}'
         else:
             try: 
                 self.resource.write(';:'.join(self.command_queue))
-                res = f'Commands sent: {"\n".join(self.command_queue)}'
+                comm_queue = "\n".join(self.command_queue)
+                res = f'Commands sent: {comm_queue}'
             except Exception as e:
-                res = f'ERROR: {self.resp}: {e}. Commands: {"\n".join(self.command_queue)}'
+                comm_queue = "\n".join(self.command_queue)
+                res = f'ERROR: {self.resp}: {e}. Commands: {comm_queue}'
         if clear_queue:
             self.clear_queue()
         return res

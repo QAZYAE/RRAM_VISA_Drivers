@@ -148,7 +148,7 @@ class Rigol_MSO8000(VISA_instrument):
         """
         if str(channel) not in ['1', '2', '3', '4']:
             return f'ERROR: {self.resp}: wrong channel number: {channel}'
-        return float(self.query(f'meas:stat:item? aver,vpp,chan{channel}'))
+        return float(self.query(f'meas:stat:item? curr,vpp,chan{channel}'))
     
 
     def measure_frequency(self, channel: str = '1'):
@@ -182,7 +182,7 @@ class Rigol_MSO8000(VISA_instrument):
         if str(ref_channel) == str(channel):
             return f'ERROR: {self.resp}: channel number and reference channel number can`t be the same'
         
-        return float(self.query(f'meas:stat:item? aver,rrdelay,chan{channel},chan{ref_channel}'))
+        return float(self.query(f'meas:stat:item? curr,rrphase,chan{channel},chan{ref_channel}'))
 
 
     def display_channels(self, channels: list = ['1', '2'], apply: bool = True):

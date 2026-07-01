@@ -267,7 +267,7 @@ class ITC_probe_station(GeneralDriver):
         return np.array(sense1), np.array(sense2)
     
     
-    def sense(self, acquire_attempts: int = 200, trigger: bool = False) -> Union[tuple[float], str]:
+    def sense(self, acquire_attempts: int = 200, trigger: bool = False, vol: Union[float, None] = None) -> Union[tuple[float], str]:
         """Read sense data from the instrument. Updates the result queue and returns a 
             result from the queue.
         
@@ -320,22 +320,18 @@ class ITC_probe_station(GeneralDriver):
             V = sense_mem[0::3]
             Curr = sense_mem[1::3]
             timestamp = self.exp_start_time + sense_mem[2::3]
-            R = V / Curr
-            for i in range(len(R)):
-                if R[i] < 0 or np.isnan(R[i]): 
-                    R[i] = np.inf
             # Temperature
             if self.enable_temperature:
                 V_temp = sense_temp[0::3]
                 Temp = K_volt2temp(V_temp, room_temp=float(self.settings['temperature']['room_temperature']))
             else:
-                V_temp, Temp = [np.nan] * len(R), [np.nan] * len(R)  # TODO: remove
-            self.logger.debug(f'Sense_data acquired: V = {V}, curr = {Curr}, R = {R}, Time={timestamp}, V_temp={V_temp}, Temp={Temp}')
-            for r, t, v, cur, tem, v_t in zip(R, timestamp, V, Curr, Temp, V_temp):
-                self.queue.append((r, t, v, cur, tem, v_t))
-            self.acquired_counter += min(len(R), len(Temp))
+                V_temp, Temp = [np.nan] * len(V), [np.nan] * len(V)  # TODO: remove
+            self.logger.debug(f'Sense_data acquired: V = {V}, curr = {Curr}, Time={timestamp}, V_temp={V_temp}, Temp={Temp}')
+            for t, v, cur, tem, v_t in zip(timestamp, V, Curr, Temp, V_temp):
+                self.queue.append((t, v, cur, tem, v_t))
+            self.acquired_counter += min(len(V), len(Temp))
             # Checking if to much data is read on each .sense()
-            if min(len(R), len(Temp)) > 20:
+            if min(len(V), len(Temp)) > 20:
                 self.sense_size = 20  # Limiting the read size till the end of the experiment
             # Checking if reading data is finished
             if self.trigger_count - self.acquired_counter <= 20:
@@ -343,10 +339,18 @@ class ITC_probe_station(GeneralDriver):
         try:
             self.logger.debug(f'ACQUIRED COUNTER (AFT): {self.acquired_counter}')
             data_to_send = self.queue.pop(0)
-            self.logger.info(f'Data returned: {data_to_send}')
+            v = data_to_send[1]
+            cur = data_to_send[2]
+            if vol is not None:
+                r = vol / cur
+            else:
+                r = v / cur
+            if r < 0 or np.isnan(r):
+                r = np.inf
+            self.logger.info(f'Data returned: {[r, *data_to_send]}')
             # self.logger.warning(f'Temperature: {data_to_send[4]} C')
             # print(f'Temperature: {data_to_send[4]} C')
-            return data_to_send  # Tuple[R, time, v, cur, Temp, V_temp]
+            return [r, *data_to_send]  # Tuple[R, time, v, cur, Temp, V_temp]
         except IndexError as e:
             self.logger.error(f'Sense queue is empty! Error: {e}')
             return 'Sense queue is empty!'

@@ -314,7 +314,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         return np.array(sense1), np.array(sense2)
         
         
-    def sense(self, acquire_attempts: int = 200, trigger: bool = False) -> Union[tuple[float, float], str]:
+    def sense(self, acquire_attempts: int = 200, trigger: bool = False, vol: Union[float, None] = None) -> Union[tuple[float, float], str]:
         """Read sense data from the instruments. Updates the result queue and returns a 
             result from the queue.
         
@@ -410,10 +410,6 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             V = primary_sense[0::3]
             Curr = primary_sense[1::3]
             timestamp = self.exp_start_time + primary_sense[2::3]
-            R = V / Curr
-            for i in range(len(R)): 
-                if R[i] < 0 or np.isnan(R[i]):
-                    R[i] = np.inf
             # Temperature and WL
             if self.settings['ITC_1T1R']['Gate_channel'] == '1':
                 # sense_gate = sense1_B
@@ -422,27 +418,36 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                 # sense_gate = sense2_B
                 sense_temp = sense1_B
             if self.enable_temperature:
-                V_temp = sense_temp[0:len(R)*2:2]
+                V_temp = sense_temp[0:len(V)*2:2]
                 Temp = K_volt2temp(V_temp, room_temp=float(self.settings['temperature']['room_temperature']))
             else:
-                V_temp, Temp = [np.nan]*len(R), [np.nan]*len(R)
-            self.logger.debug(f'Sense_data acquired: V = {V}, curr = {Curr}, R = {R}, Time={timestamp}, V_temp={V_temp}, Temp={Temp}')
-            for r, t, v, cur, tem, v_t in zip(R, timestamp, V, Curr, Temp, V_temp):
-                self.queue.append((r, t, v, cur, tem, v_t))
-            self.acquired_counter += len(R)
+                V_temp, Temp = [np.nan]*len(V), [np.nan]*len(V)
+            self.logger.debug(f'Sense_data acquired: V = {V}, curr = {Curr}, Time={timestamp}, V_temp={V_temp}, Temp={Temp}')
+            for t, v, cur, tem, v_t in zip(timestamp, V, Curr, Temp, V_temp):
+                self.queue.append((t, v, cur, tem, v_t))
+            self.acquired_counter += len(V)
             # Checking if to much data is read on each .sense()
-            if len(R) > 20:
+            if len(V) > 20:
                 self.sense_size = 20  # Limiting the read size till the end of the experiment
             # Checking if reading data is finished
             if self.trigger_count - self.acquired_counter <= 20:
                 self.sense_size = None
         try:
+            # Sending data
             self.logger.debug(f'ACQUIRED COUNTER (AFT): {self.acquired_counter}')
             data_to_send = self.queue.pop(0)
-            self.logger.info(f'Data returned: {data_to_send}')
+            v = data_to_send[1]
+            cur = data_to_send[2]
+            if vol is not None:
+                r = vol / cur
+            else:
+                r = v / cur
+            if r < 0 or np.isnan(r):
+                r = np.inf
+            self.logger.info(f'Data returned: {[r, *data_to_send]}')
             # self.logger.warning(f'Temperature: {data_to_send[4]} C')
             # print(f'Temperature: {data_to_send[4]} C')
-            return data_to_send  # Tuple[R, time]
+            return [r, *data_to_send]  # Tuple[R, time]
         except IndexError:
             self.logger.error('Sense queue is empty!')
             return 'Sense queue is empty!'

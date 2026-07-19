@@ -109,6 +109,25 @@ class ITC_1T1R_32x8_switched(B2902B_1T1R_32x8_driver):
             self.logger.error(f'Error connecting cell {wl}-{bl}: {resp}')
             return False, resp
         return True, resp
+    
+    
+    def connect_multiple_cells(self, wl: list[int], bl: list[int]) -> tuple[bool, str]:
+        """Connect multiple cells via switch unit. wl and bl are 0 through 7 and 0 through 31.
+
+        Args:
+            wl (list[int]): Word Lines to connect (0 through 7).
+            bl (list[int]): Bit Lines to connect (0 through 31).
+
+        Returns:
+            flag, response (tuple[bool, str]): Connected flag (True if the cell was
+            successfully disconnected), response or error.
+        """
+        self.logger.info(f'Connecting multiple cells: rows: {wl}, columns: {bl}')
+        resp = self.switch.connect_multiple_cells(rows=[row+1 for row in wl], columns=[col+1 for col in bl])
+        if resp.startswith('ERROR'):
+            self.logger.error(f'Error connecting multiple cells: rows {wl}, columns: {bl}:\n{resp}')
+            return False, resp
+        return True, resp
         
         
     def disconnect(self) -> tuple[bool, str]:

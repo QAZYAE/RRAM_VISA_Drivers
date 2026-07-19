@@ -247,23 +247,31 @@ class ITC_probe_station(GeneralDriver):
         return flag, '\n'.join(resps)
     
     
-    def _random_sense(self, include_time: bool = True) -> tuple[np.ndarray]:  # TODO move to GeneralDriver
+    def _random_sense(self, include_time: bool = True, vol: Union[float, None] = None) -> tuple[np.ndarray]:  # TODO move to GeneralDriver
         """Generates random sense samples in format (Voltage, Current) with size=acquired_counter+1
             (Size is the number of (Voltage, Current) pairs)
             
         Args:
             include_time (bool, optional): If True, includes timestamp in the sense data. Defaults to True.
+            vol (float | None, optional): Voltage applied. If it is not none, this voltage is returned. Defaults to None.
 
         Returns:
             sense1, sense2 (tuple[np.ndarray]): sense samples for two channels.
         """
         V = np.random.randint(1, 10000, 2) / 1e3
         Curr = np.random.randint(1, 10000, 2) / 1e7
+        if vol is not None:
+            if vol < 0:
+                Curr += -1
+            if self.settings['ITC_probe_station']['Memristor_channel'] == '1':
+                V[0] = vol
+            else:
+                V[1] = vol
         if include_time:
             timestamp = self.acquired_counter * self.trigger_interval
             sense1, sense2 = [V[0], Curr[0], timestamp], [V[1], Curr[1], timestamp]
         else:
-            sense1, sense2 = [V[0]/1000, Curr[0]], [V[1]/1000, Curr[1]]
+            sense1, sense2 = [V[0], Curr[0]], [V[1], Curr[1]]
         return np.array(sense1), np.array(sense2)
     
     
@@ -283,7 +291,7 @@ class ITC_probe_station(GeneralDriver):
         self.logger.debug(f'ACQUIRED_COUNTER (BEFORE): {self.acquired_counter}, (trigger_count: {self.trigger_count})')
         if self.acquired_counter != self.trigger_count:  # Skip acquire if queue is full
             if self.sim:
-                sense1, sense2 = self._random_sense()
+                sense1, sense2 = self._random_sense(vol=vol)
             else:
                 # Trigger
                 if trigger:

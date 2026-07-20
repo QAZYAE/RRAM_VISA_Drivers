@@ -447,7 +447,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             v = data_to_send[1]
             cur = data_to_send[2]
             if vol is not None:
-                r = vol / cur
+                r = abs(vol / cur)
             else:
                 r = v / cur
             if r < 0 or np.isnan(r):

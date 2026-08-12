@@ -5,17 +5,6 @@
 """
 import pyvisa
 from RRAM_VISA_Drivers.SMU_drivers import B2902B_1T1R_32x8_driver
-from RRAM_VISA_Drivers.core.gui_connection import set_driver_instruments, check_connection_B2902B
-
-
-
-set_driver_instruments(
-    driver_name='ITC_1T1R_probe_station', 
-    instruments={
-        'B2902B-1 (BL,NL)': check_connection_B2902B,
-        'B2902B-2 (WL,T)': check_connection_B2902B, 
-    }
-)
 
 
 

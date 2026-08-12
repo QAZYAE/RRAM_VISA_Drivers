@@ -56,6 +56,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
     B_smu_list: list[Keysight_SMU]
     A_smu_channels: str
     B_smu_channels: str
+    batch_size: int = 10000  # Max array length the driver can handle
     
     def __init__(
         self, 

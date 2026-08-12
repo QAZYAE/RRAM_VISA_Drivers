@@ -8,22 +8,6 @@ import pyvisa
 import os
 from RRAM_VISA_Drivers.SMU_drivers import B2902B_1T1R_32x8_driver
 from RRAM_VISA_Drivers.Switch_drivers import Keysight_34980A_1T1R_32x8
-from RRAM_VISA_Drivers.core.gui_connection import (
-    set_driver_instruments, 
-    check_connection_B2902B,
-    check_connection_34980A
-)
-
-
-
-set_driver_instruments(
-    driver_name='ITC_1T1R_32x8_switched', 
-    instruments={
-        'B2902B-1 (BL,NL)': check_connection_B2902B,
-        'B2902B-2 (WL,T)': check_connection_B2902B, 
-        '34980A (Switch)': check_connection_34980A
-    }
-)
  
 
 
@@ -139,7 +123,7 @@ class ITC_1T1R_32x8_switched(B2902B_1T1R_32x8_driver):
         """
         resps = []  # Response list
         resps.append(self.switch.disconnect_all())
-        flag, r = super().disconnect()
+        _flag, r = super().disconnect()
         resps.append(r)
         # Closing resource manager
         if not self.sim:

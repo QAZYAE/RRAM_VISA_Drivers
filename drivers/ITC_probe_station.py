@@ -9,16 +9,6 @@ from typing import Union
 from RRAM_VISA_Drivers.core import GeneralDriver
 from RRAM_VISA_Drivers.SMU_drivers import B2902B, Keysight_SMU
 from RRAM_VISA_Drivers.core.temperature import K_volt2temp
-from RRAM_VISA_Drivers.core.gui_connection import set_driver_instruments, check_connection_B2902B
-
-
-
-set_driver_instruments(
-    driver_name='ITC_probe_station', 
-    instruments={
-        'B2902B (Mem,T)': check_connection_B2902B,
-    }
-)
 
 
 
@@ -48,6 +38,7 @@ class ITC_probe_station(GeneralDriver):
     enable_temperature: bool
     smu_list: list[Keysight_SMU]
     smu_channels: str
+    batch_size: int = 10000  # Max array length the driver can handle
     
     def __init__(
         self, 

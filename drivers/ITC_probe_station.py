@@ -36,7 +36,7 @@ class ITC_probe_station(GeneralDriver):
         queue (list): Results queue that fills while reading the data from instruments.
         sim (str): True for simulation mode.
         enable_temperature (bool): If True, temperature measurement is enabled.
-        smu_list (list): List of SMUs to use in standart configurations.
+        smu_list (list): List of SMUs to use in standard configurations.
         smu_channels (str): String of channels used in the setup ('1' | '2' | '1,2').
     """
     trigger_interval: float = 100e-6
@@ -219,7 +219,7 @@ class ITC_probe_station(GeneralDriver):
         resps.append(self.A.clear())
         resps.append(self.A.set_output_state('off'))
         for smu in self.smu_list:
-            resps.append(smu.set_base_voltage_immediate(0, current_compliance=1e-6))
+            resps.append(smu.set_base_output_level_immediate(0, compliance=1e-6))
         self.logger.debug('\t' + '\t\n'.join(resps))
         for r in resps:
             if r.startswith('ERROR'):
@@ -252,7 +252,7 @@ class ITC_probe_station(GeneralDriver):
         return flag, '\n'.join(resps)
     
     
-    def _random_sense(self, include_time: bool = True, vol: Union[float, None] = None) -> tuple[np.ndarray]:  # TODO move to GeneralDriver
+    def _random_sense(self, include_time: bool = True, vol: Union[float, None] = None) -> tuple[np.ndarray]:
         """Generates random sense samples in format (Voltage, Current) with size=acquired_counter+1
             (Size is the number of (Voltage, Current) pairs)
             
@@ -285,8 +285,10 @@ class ITC_probe_station(GeneralDriver):
                 else:
                     i1 = self.random_values() / 1e9
                     i2 = vol
+                print(i1, i2)
                 v1 = i1 * R1
                 v2 = i2 * R2
+                print(v1, v2)
                 if v1 == 0:  # Adding randomness, preventing divide by 0
                     v1 = self.random_values() / 1e6
                 if v2 == 0:
@@ -300,7 +302,7 @@ class ITC_probe_station(GeneralDriver):
     
     
     def _get_nan_sense(self, include_time: bool = True) -> tuple[np.ndarray]:
-        """Fill sense output format with nans (failed to get sense data).
+        """Fill sense output format with NaN (failed to get sense data).
 
         Args:
             include_time (bool, optional): If True, includes timestamp in the sense data. Defaults to True.
@@ -333,7 +335,7 @@ class ITC_probe_station(GeneralDriver):
         if self.acquired_counter != self.trigger_count:  # Skip acquire if queue is full
             if self.sim:
                 sense1, sense2 = self._random_sense(vol=vol)
-            else:  # Aquire from real instruments
+            else:  # Acquire from real instruments
                 # Trigger
                 if self.trigger_needed:
                     self.logger.debug('SENSE TRIGGER')
@@ -543,30 +545,70 @@ class ITC_probe_station(GeneralDriver):
                               trigger_count = 2 * n_points if double else n_points,
                               trigger_interval = trigger_interval)
         # Configuring triggers and source shapes
+        self.resps.append(self.mem_smu.set_smu_mode('voltage'))
         for smu in self.smu_list:
-            if smu.smu_mode == 'current':
-                self.resps.append(smu.set_smu_mode('voltage'))
             self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
                                                     acquire_delay=0.3*self.trigger_interval))
             self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.trigger_interval))
             self.resps.append(smu.set_source_shape('DC'))
         self.resps.append(self.mem_smu.set_measurement_range(range_type='normal'))
         # Configuring sweep
-        if sign:  # Reset
-            start = -float(v_start)
-            stop = -float(v_stop)
-        else:  # Set
-            start = v_start
-            stop = v_stop
-        self.resps.append(self.mem_smu.set_sweep_voltage(stop=stop, n_points=n_points, start=start, 
-                                                         double=double, current_compliance=current_compliance))
+        self.resps.append(self.mem_smu.set_sweep_output(stop=signed(v_stop, sign), 
+                                                        n_points=n_points, 
+                                                        start=signed(v_start, sign), 
+                                                        double=double, 
+                                                        compliance=current_compliance))
         return self._check_config_and_start('SMU_IV_DC')
     
     
     def config_current_sweep(
-        self,
-    ):
-        pass
+        self, 
+        trigger_interval: float, 
+        i_start: float, 
+        i_stop: float,
+        n_points: int,
+        double: bool,
+        voltage_compliance: float,
+        sign: int = 1
+    ) -> tuple[bool, str]:
+        """Configure Current sweep (DC) mode. WARNING: Method doesn't connect the crossbar cell, 
+        it should be connected via .connect_cell() method.
+
+        Args:
+            trigger_interval (float): Interval between triggers (seconds).
+            i_start (float): Start current (Amperes).
+            i_stop (float): Stop current (Amperes).
+            n_points (int): Number of sweep points in a single direction 
+                (doubled automatically for double IV curve).
+            double (bool): True for double IV curve.
+            voltage_compliance (float): Voltage compliance (Volts).
+            sign (int, optional): Side where sweep current is applied: 1 -- negative current, 0 -- positive current.
+                Defaults to 1.
+
+        Returns:
+            flag, response (tuple[bool, str]): Good_config_flag (True if instruments were 
+            successfully configured), response or error.
+        """
+        self._set_init_values(mode='DC', 
+                              trigger_count = 2 * n_points if double else n_points,
+                              trigger_interval = trigger_interval,
+                              control_value = 'current')
+        # Configuring triggers and source shapes
+        self.resps.append(self.mem_smu.set_smu_mode('current'))
+        for smu in self.smu_list:
+            self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
+                                                    acquire_delay=0.3*self.trigger_interval))
+            self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.trigger_interval))
+            self.resps.append(smu.set_source_shape('DC'))
+        self.resps.append(self.mem_smu.set_measurement_range(range_type='normal'))
+        # Configuring sweep
+        # Configuring sweep
+        self.resps.append(self.mem_smu.set_sweep_output(stop=signed(i_stop, sign), 
+                                                        n_points=n_points, 
+                                                        start=signed(i_start, sign), 
+                                                        double=double, 
+                                                        compliance=voltage_compliance))
+        return self._check_config_and_start('SMU_Current_Sweep_DC')
     
     
     def mode_7(  # TODO rework if needed
@@ -601,9 +643,8 @@ class ITC_probe_station(GeneralDriver):
                               trigger_count = trigger_count,
                               pulse_width = pulse_width)
         # Configuring triggers and source shapes
+        self.resps.append(self.mem_smu.set_smu_mode('voltage'))
         for smu in self.smu_list:
-            if smu.smu_mode == 'current':
-                self.resps.append(smu.set_smu_mode('voltage'))
             self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
                                                     acquire_delay=0.3*self.pulse_width))
             self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.pulse_width))
@@ -619,7 +660,7 @@ class ITC_probe_station(GeneralDriver):
                 smu_list = [-float(apply_voltage), -float(read_voltage)]
             else: # Set
                 smu_list = [float(apply_voltage), -float(read_voltage)]
-        self.resps.append(self.mem_smu.set_list_voltage(smu_list, current_compliance=current_compliance))
+        self.resps.append(self.mem_smu.set_list_output(smu_list, compliance=current_compliance))
         # Checking if configuration is set
         config_flag, response = self._check_config_and_start('mode_7')
         if not config_flag:
@@ -669,9 +710,8 @@ class ITC_probe_station(GeneralDriver):
                               trigger_needed = True,
                               skip_one_sense = True)
         # Triggers and source shapes
+        self.resps.append(self.mem_smu.set_smu_mode('voltage'))
         for smu in self.smu_list:
-            if smu.smu_mode == 'current':
-                self.resps.append(smu.set_smu_mode('voltage'))
             self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.pulse_width))
             self.resps.append(smu.set_trigger_BUS(self.trigger_count, acquire_delay=0.3*self.pulse_width))
         self.resps.append(self.mem_smu.set_source_shape('pulse'))
@@ -680,7 +720,7 @@ class ITC_probe_station(GeneralDriver):
         if self.enable_temperature:
             self.resps.append(self.temp_smu.set_source_shape('DC'))
         # Voltage config
-        self.resps.append(self.mem_smu.set_list_voltage(pulse_sequence, current_compliance=current_compliance))
+        self.resps.append(self.mem_smu.set_list_output(pulse_sequence, compliance=current_compliance))
         flag, resp = self._check_config_and_start('SMU_std', arm_B=True)
         return flag, resp
     
@@ -716,9 +756,8 @@ class ITC_probe_station(GeneralDriver):
                               pulse_width = pulse_width,
                               trigger_interval = trigger_interval)
         # Configuring triggers and source shapes
+        self.resps.append(self.mem_smu.set_smu_mode('voltage'))
         for smu in self.smu_list:
-            if smu.smu_mode == 'current':
-                self.resps.append(smu.set_smu_mode('voltage'))
             self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
                                                acquire_delay=0.3*self.pulse_width))
             self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.pulse_width))
@@ -729,7 +768,7 @@ class ITC_probe_station(GeneralDriver):
         self.resps.append(self.mem_smu.set_measurement_range(range_type='speed'))
         self.resps.append(self.mem_smu.set_pulse_config(width=self.pulse_width))
         # Voltage config
-        self.resps.append(self.mem_smu.set_list_voltage([signed(read_voltage, sign)] * count, current_compliance=current_compliance))
+        self.resps.append(self.mem_smu.set_list_output([signed(read_voltage, sign)] * count, compliance=current_compliance))
         return self._check_config_and_start('SMU_pulsed_retention')
     
     
@@ -770,9 +809,8 @@ class ITC_probe_station(GeneralDriver):
                               pulse_width=pulse_width, trigger_interval=trigger_interval,
                               skip_one_sense=True)
         # Configuring triggers and source shapes
+        self.resps.append(self.mem_smu.set_smu_mode('voltage'))
         for smu in self.smu_list:
-            if smu.smu_mode == 'current':
-                self.resps.append(smu.set_smu_mode('voltage'))
             self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
                                                acquire_delay=0.3*self.pulse_width))
             self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.pulse_width))
@@ -789,9 +827,9 @@ class ITC_probe_station(GeneralDriver):
             voltage_list = (rev_list + dir_list) * count
         else:
             voltage_list = (dir_list + rev_list) * count
-        self.resps.append(self.mem_smu.set_list_voltage(voltage_list=voltage_list, 
-                                                        current_compliance=dir_cc,
-                                                        negative_current_compliance=rev_cc))
+        self.resps.append(self.mem_smu.set_list_output(output_list=voltage_list, 
+                                                       compliance=dir_cc,
+                                                       negative_compliance=rev_cc))
         return self._check_config_and_start('SMU_endurance')
     
     
@@ -822,9 +860,8 @@ class ITC_probe_station(GeneralDriver):
             self._set_init_values(mode='pulse', trigger_count=count,
                                 pulse_width=pulse_width, trigger_interval=trigger_interval)
             # Configuring triggers and source shapes
+            self.resps.append(self.mem_smu.set_smu_mode('voltage'))
             for smu in self.smu_list:
-                if smu.smu_mode == 'current':
-                    self.resps.append(smu.set_smu_mode('voltage'))
                 self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
                                                         acquire_delay=0.3*self.pulse_width))
                 self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.pulse_width))
@@ -836,6 +873,6 @@ class ITC_probe_station(GeneralDriver):
             self.resps.append(self.mem_smu.set_measurement_range(range_type='speed'))
             # Voltage config
             voltage_list = [signed(voltage, sign)] * count
-            self.resps.append(self.mem_smu.set_list_voltage(voltage_list=voltage_list, 
-                                                            current_compliance=compliance))
+            self.resps.append(self.mem_smu.set_list_output(output_list=voltage_list, 
+                                                           current_compliance=compliance))
             return self._check_config_and_start('SMU_pot_dep')

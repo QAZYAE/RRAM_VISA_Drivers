@@ -5,6 +5,9 @@ import logging
 from logging.handlers import RotatingFileHandler
 import os
 from configparser import ConfigParser
+import numpy as np
+import shutil
+from datetime import datetime
         
         
         
@@ -20,6 +23,8 @@ class GeneralDriver:
         logger (logging.Logger): Driver logger.
         scpi_logger (logging.Logger | None): SCPI logger for low-level commands.
         need_stop (bool): Flag for stopping the experiment.
+        save_failed_logs (bool): If True, saves logs to the folder on driver fail.
+        failed_logs_folder (str): Path to folder where failed logs are saved.
     """
     def __init__(self) -> None:
         """
@@ -46,6 +51,12 @@ class GeneralDriver:
             )
         else:
             self.scpi_logger = None
+        # Check if save log folder exists
+        if eval(self.settings['logger']['save_failed_logs']):
+            self.save_failed_logs = True
+            self.create_failed_logs_folder()
+        else:
+            self.save_failed_logs = False
         
     
     def update_settings(self) -> None:
@@ -100,6 +111,36 @@ class GeneralDriver:
         """
         self.logger.setLevel(level.strip().upper())
         
+    
+    def create_failed_logs_folder(self):
+        """Check if failed logs folder exists or create it"""
+        folder = str(self.settings['logger']['failed_logs_folder']).strip()
+        if folder == '':
+            self.failed_logs_folder = os.path.join(self.drivers_path, 'failed_logs')
+        else:
+            self.failed_logs_folder = folder
+        if not os.path.isdir(self.failed_logs_folder):
+            try:
+                os.makedirs(self.failed_logs_folder)
+            except Exception as e:
+                print(f'Could not create a Failed logs folder!\n{type(e).__name__}: {e}')
+                self.save_failed_logs = False
+        
+        
+    def save_logs(self) -> None:
+        """Save a copy of logs to the log folder"""
+        if not self.save_failed_logs:
+            return
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        try:
+            shutil.copy2(src=self.log_path,
+                        dst=os.path.join(self.failed_logs_folder, f'{timestamp}.driver.log'))
+            if self.scpi_logger is not None:
+                shutil.copy2(src=self.scpi_log_path,
+                             dst=os.path.join(self.failed_logs_folder, f'{timestamp}.scpi.log'))
+        except Exception as e:
+            print(f'Could not copy the log files!\n{type(e).__name__}: {e}')
+        
         
     def stop_experiment(self) -> None:
         """
@@ -124,3 +165,27 @@ class GeneralDriver:
         except Exception as e:
             response = f'ERROR: {type(e).__name__}: {e}'
         return response
+    
+    
+    def random_values(self, array_number: int = 1, length: int = 1, limits: tuple[int, int] = (100, 100000)) -> tuple[np.ndarray]:
+        """Generate a sample of random values.
+
+        Args:
+            array_number (int, optional): Number of random arrays. Defaults to 1.
+            length (int, optional): Length of random arrays. Defaults to 1.
+            limits (tuple[int, int], optional): Limits of random generation. Defaults to (100, 100000)
+
+        Returns:
+            tuple[np.ndarray]: Random resistance sample.
+        """
+        result = []
+        for _ in range(array_number):
+            rnd = np.random.randint(*limits, length)
+            if length == 1:
+                result.append(rnd[0])
+            else:
+                result.append(rnd)
+        if array_number == 1:
+            return result[0]
+        return tuple(result)
+        

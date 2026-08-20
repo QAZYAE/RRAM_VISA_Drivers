@@ -285,14 +285,17 @@ class ITC_probe_station(GeneralDriver):
                 else:
                     i1 = self.random_values() / 1e9
                     i2 = vol
-                print(i1, i2)
                 v1 = i1 * R1
                 v2 = i2 * R2
-                print(v1, v2)
                 if v1 == 0:  # Adding randomness, preventing divide by 0
                     v1 = self.random_values() / 1e6
                 if v2 == 0:
                     v2 = self.random_values() / 1e6
+        else:
+            v1 = self.random_values() / 1e6
+            v2 = self.random_values() / 1e6
+            i1 = v1 / R1
+            i2 = v2 / R2
         if include_time:
             timestamp = self.acquired_counter * self.trigger_interval
             sense1, sense2 = [v1, i1, timestamp], [v2, i2, timestamp]
@@ -358,6 +361,7 @@ class ITC_probe_station(GeneralDriver):
                     sense_data_A = self._get_nan_sense()  # WARNING: returns np.nan to the GUI if sense failed
                 if isinstance(sense_data_A, str):
                     self.logger.error(f'Sense_A acquire error: {sense_data_A}')
+                    self.save_logs()
                     return sense_data_A
                 self.logger.debug('Sense_A acquired')
                 sense1, sense2 = sense_data_A
@@ -393,10 +397,22 @@ class ITC_probe_station(GeneralDriver):
             data_to_send = self.queue.pop(0)
             v = data_to_send[1]
             cur = data_to_send[2]
-            if vol is not None:
-                r = vol / cur
-            else:
-                r = v / cur
+            if self.control_value == 'voltage':
+                if cur == 0:
+                    r = np.inf
+                else:
+                    if vol is not None:
+                        r = vol / cur
+                    else:
+                        r = v / cur
+            else:  # Controlling current, vol is current
+                if vol is not None:
+                    if vol == 0:
+                        r = np.inf
+                    else:
+                        r = v / vol  # Voltage over current
+                else:
+                    r = v / cur  
             if r <= 0:
                 r = np.inf
             self.logger.info(f'Data returned: {[r, *data_to_send]}')
@@ -430,6 +446,7 @@ class ITC_probe_station(GeneralDriver):
         resp = self.A.trigger(self.smu_channels)  # Trigger A
         if resp.startswith('ERROR'):
             self.logger.error(f'.sense(): A trigger error: {resp}')
+            self.save_logs()
             return False, f'.sense(): A trigger error: {resp}'
         self.logger.debug('.trigger(): trigger sent to instrument A')
         if skip_acquire:
@@ -602,7 +619,6 @@ class ITC_probe_station(GeneralDriver):
             self.resps.append(smu.set_source_shape('DC'))
         self.resps.append(self.mem_smu.set_measurement_range(range_type='normal'))
         # Configuring sweep
-        # Configuring sweep
         self.resps.append(self.mem_smu.set_sweep_output(stop=signed(i_stop, sign), 
                                                         n_points=n_points, 
                                                         start=signed(i_start, sign), 
@@ -691,6 +707,7 @@ class ITC_probe_station(GeneralDriver):
             current_compliance (float): Current compliance (Amperes).
             pulse_width (float): Pulse width (seconds).
             read_voltage (float): Read voltage (Read pulse is applied after each switch pulse).
+            read_direction (int): Side where read pulse is applied: 1 -- negative voltage, 0 -- positive voltage. 
             sign (int, optional): Side where sweep voltage is applied: 1 -- negative voltage, 0 -- positive voltage. 
                 Defaults to 1.
 
@@ -745,7 +762,7 @@ class ITC_probe_station(GeneralDriver):
             sign (int, optional): Side where voltage is applied: 1 -- negative voltage, 0 -- positive voltage. 
                 Defaults to 1.
             trigger_interval (float, optional): Trigger interval (seconds). If less then 5 * pulse_width,
-                falls back to 5 * pulse_width. Defaults to 0.
+                falls back to 2 * pulse_width. Defaults to 0.
 
         Returns:
             tuple[bool, str]: Good_config_flag (True if instruments were

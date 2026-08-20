@@ -29,7 +29,10 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         trigger_interval (float): Interval between triggers in seconds. Defaults to 100 us.
         trigger_count (int): Trigger count for current experiment.
         acquired_counter (int): Number of resistances acquired via sense(). Resets on config or clear.
-        read_side (int): SMU to read current from when using .sense(): 1 for BL, or 2 for NL.
+        trigger_needed (bool): If True, a trigger is sent before each .sense().
+        skip_one_sense (bool): If True, one sense value is skipped on each .sense() (for pulse sequences switch+read).
+        control_value (str): Unit which is controlled in the experiment (voltage or current).
+        read_sign (int): SMU to read current from when using .sense() 1 for BL (RESET), or 0 for NL (SET).
         need_stop (bool): Flag that can be set to True for GUI. Used if the driver is stuck in 
             acquire loop and user wants to stop the experiment.
         sense_size (int | None): Size of data to read from the instrument's buffer in .sense().
@@ -45,7 +48,10 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
     trigger_interval: float = 100e-6
     trigger_count: int = 0
     acquired_counter: int = 0
-    read_side: int = 1
+    trigger_needed: bool = False
+    skip_one_sense: bool = False
+    control_value: str = 'voltage'
+    read_sign: int = 1
     need_stop: bool = False
     sense_size: Union[int, None] = None
     queue: list = []
@@ -92,14 +98,14 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             self.NL_smu = self.A.SMU2
             self._read_sides = {
                 1: 1,  # BL -> SMU1
-                2: 2
+                0: 2
             }
         else:
             self.BL_smu = self.A.SMU2
             self.NL_smu = self.A.SMU1
             self._read_sides = {
                 1: 2,  # BL -> SMU2
-                2: 1
+                0: 1
             }
         if self.enable_temperature:
             self.smu_list = [self.BL_smu, self.NL_smu, self.gate_smu, self.temp_smu]
@@ -168,6 +174,11 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         self.B.beep(frequency=1200, time=0.2)
         self.logger.info('B2902B 1T1R 32x8 driver init success')
         
+        
+    def read_smu(self) -> str:
+        """Get the SMU number from whitch the resistance is read"""
+        return self._read_sides[self.read_sign]
+        
     
     def get_tech_data(self) -> str:
         """Get information about instruments.
@@ -189,7 +200,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         resps = []
         resps.append(self.A.clear())
         resps.append(self.B.clear())
-        resps.append(self.gate_smu.set_base_voltage_immediate(0, current_compliance=1e-6))
+        resps.append(self.gate_smu.set_base_output_level_immediate(0, compliance=1e-6))
         self.acquired_counter = 0
         for r in resps:
             if r.startswith('ERROR'):
@@ -219,7 +230,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         resps = []  # Response list
         resps.append(self.A.clear())
         resps.append(self.B.clear())
-        resps.append(self.gate_smu.set_base_voltage_immediate(0, current_compliance=1e-6))
+        resps.append(self.gate_smu.set_base_output_level_immediate(0, compliance=1e-6))
         resps.append(self.A.set_output_state('off'))
         resps.append(self.B.set_output_state('off'))
         resps.append(self.A.beep(frequency=1200, time=0.2))
@@ -260,7 +271,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         resps.append(self.A.set_output_state('off'))
         resps.append(self.B.set_output_state('off'))
         for smu in self.A_smu_list + [self.gate_smu]:
-            resps.append(smu.set_base_voltage_immediate(0, current_compliance=1e-6))
+            resps.append(smu.set_base_output_level_immediate(0, compliance=1e-6))
         self.logger.debug('\t' + '\t\n'.join(resps))
         for r in resps:
             if r.startswith('ERROR'):
@@ -306,24 +317,65 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         Returns:
             sense1, sense2 (tuple[np.ndarray]): sense samples for two channels.
         """
-        V = np.random.randint(1, 10000, 2) / 1e3
-        Curr = np.random.randint(1, 10000, 2) / 1e7
+        R1, R2 = self.random_values(array_number=2, length=1)
         if vol is not None:
-            if vol < 0:
-                Curr += -1
-            if self._read_sides[self.read_side] == 1:
-                V[0] = vol
+            if self.control_value == 'voltage':
+                if self.read_smu() == 1:
+                    v1 = vol
+                    v2 = self.random_values() / 1e6
+                else:
+                    v1 = self.random_values() / 1e6
+                    v2 = vol
+                i1 = v1 / R1
+                i2 = v2 / R2
+                if i1 == 0:  # Adding randomness, preventing divide by 0
+                    i1 = self.random_values() / 1e9
+                if i2 == 0:
+                    i2 = self.random_values() / 1e9
             else:
-                V[1] = vol
+                if self.read_smu() == 1:
+                    i1 = vol
+                    i2 = self.random_values() / 1e9
+                else:
+                    i1 = self.random_values() / 1e9
+                    i2 = vol
+                v1 = i1 * R1
+                v2 = i2 * R2
+                if v1 == 0:  # Adding randomness, preventing divide by 0
+                    v1 = self.random_values() / 1e6
+                if v2 == 0:
+                    v2 = self.random_values() / 1e6
+        else:
+            v1 = self.random_values() / 1e6
+            v2 = self.random_values() / 1e6
+            i1 = v1 / R1
+            i2 = v2 / R2
         if include_time:
             timestamp = self.acquired_counter * self.trigger_interval
-            sense1, sense2 = [V[0], Curr[0], timestamp], [V[1], Curr[1], timestamp]
+            sense1, sense2 = [v1, i1, timestamp], [v2, i2, timestamp]
         else:
-            sense1, sense2 = [V[0], Curr[0]], [V[1], Curr[1]]
+            sense1, sense2 = [v1, i1], [v2, i2]
+        return np.array(sense1), np.array(sense2)
+    
+    
+    def _get_nan_sense(self, include_time: bool = True) -> tuple[np.ndarray]:
+        """Fill sense output format with NaN (failed to get sense data).
+
+        Args:
+            include_time (bool, optional): If True, includes timestamp in the sense data. Defaults to True.
+
+        Returns:
+            sense1, sense2 (tuple[np.ndarray]): sense samples for two channels.
+        """
+        if include_time:
+            timestamp = self.acquired_counter * self.trigger_interval
+            sense1, sense2 = [np.nan, np.nan, timestamp], [np.nan, np.nan, timestamp]
+        else:
+            sense1, sense2 = [np.nan, np.nan], [np.nan, np.nan]
         return np.array(sense1), np.array(sense2)
         
         
-    def sense(self, acquire_attempts: int = 200, trigger: bool = False, vol: Union[float, None] = None) -> Union[tuple[float, float], str]:
+    def sense(self, acquire_attempts: int = 200, vol: Union[float, None] = None) -> Union[tuple[float, float], str]:
         """Read sense data from the instruments. Updates the result queue and returns a 
             result from the queue.
         
@@ -335,19 +387,15 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         Returns:
             resistance (float): First resistance in the queue.
         """
-        # Calculating time to sleep between acquire attempts
-        # if self.trigger_interval > 10e-3:
-        #     sleep_time = 1e-3
-        # else:
         sleep_time = 0.1 * self.trigger_interval
         self.logger.debug(f'ACQUIRED_COUNTER (BEFORE): {self.acquired_counter}, (trigger_count: {self.trigger_count})')
         if self.acquired_counter != self.trigger_count:  # Skip acquire if queue is full
             if self.sim:
                 sense1, sense2 = self._random_sense(vol=vol)
                 sense1_B, sense2_B = self._random_sense(include_time=False)
-            else:
+            else:  # Acquire from instruments
                 # Trigger
-                if trigger:
+                if self.trigger_needed:
                     self.logger.debug(f'SENSE TRIGGER INSTRUMENT STATUS: A: {self.A.check_trigger_status()}, B: {self.B.check_trigger_status()}')
                     flag, resp = self.B.check_armed(channel=self.B_smu_channels)  # Check if B is ready for trigger
                     if not flag:
@@ -360,14 +408,10 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                     else:
                         self.logger.debug('Sense: Trigger sent to instrument A')
                 # ACQUIRE
-                if self._read_sides[self.read_side] == 1:
-                    primary_channel = '1'
-                else:
-                    primary_channel = '2'
                 # ACQUIRE A
                 for i in range(acquire_attempts):
                     sense_data_A = self.A.get_sense_data(offset=self.acquired_counter, size=self.sense_size, 
-                                                         channels=primary_channel)  # sense_ch1, sense_ch2
+                                                         channels=str(self.read_smu()))  # sense_ch1, sense_ch2
                     self.logger.debug(f'Sense_A: acquire attempt {i}: {sense_data_A}')
                     if sense_data_A is not None:
                         break
@@ -378,9 +422,11 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                 if sense_data_A is None:
                     self.logger.error('Cant obtain sense_A data!')
                     self.logger.error(f'Sense A data (no arguments): {self.A.query(":sense1:data?;:sense2:data?")}')
-                    return 'Cant obtain sense_A data!'
+                    self.save_logs()
+                    sense_data_A = self._get_nan_sense()
                 if isinstance(sense_data_A, str):
                     self.logger.error(f'Sense_A acquire error: {sense_data_A}')
+                    self.save_logs()
                     return sense_data_A
                 # ACQUIRE B
                 for i in range(acquire_attempts):
@@ -401,9 +447,11 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                 if sense_data_B is None:
                     self.logger.error('Cant obtain sense_B data!')
                     self.logger.error(f'Sense B data (no arguments): {self.B.query(":sense1:data?;:sense2:data?")}')
-                    return 'Cant obtain sense_B data!'
+                    self.save_logs()
+                    sense_data_B = self._get_nan_sense(include_time=False)
                 if isinstance(sense_data_B, str):
                     self.logger.error(f'Sense_B acquire error: {sense_data_B}')
+                    self.save_logs()
                     return sense_data_B
                 self.logger.debug('Sense_A and sense_B acquired')
                 sense1, sense2 = sense_data_A
@@ -412,7 +460,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                 # TODO Save WL data
             # PARSING DATA
             # B data might be longer than A data
-            if self._read_sides[self.read_side] == 1:
+            if self.read_smu() == 1:
                 primary_sense = sense1
             else:
                 primary_sense = sense2
@@ -447,11 +495,23 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             data_to_send = self.queue.pop(0)
             v = data_to_send[1]
             cur = data_to_send[2]
-            if vol is not None:
-                r = abs(vol / cur)
-            else:
-                r = v / cur
-            if r < 0 or np.isnan(r):
+            if self.control_value == 'voltage':
+                if cur == 0:
+                    r = np.inf
+                else:
+                    if vol is not None:
+                        r = vol / cur
+                    else:
+                        r = v / cur
+            else:  # Controlling current, vol is current
+                if vol is not None:
+                    if vol == 0:
+                        r = np.inf
+                    else:
+                        r = v / vol  # Voltage over current
+                else:
+                    r = v / cur  
+            if r <= 0:
                 r = np.inf
             self.logger.info(f'Data returned: {[r, *data_to_send]}')
             # self.logger.warning(f'Temperature: {data_to_send[4]} C')
@@ -462,7 +522,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             return 'Sense queue is empty!'
         
         
-    def trigger(self) -> tuple[bool, str]:
+    def trigger(self, skip_acquire: bool = True, attempts: int = 200, sleep_time: float = 0.001) -> tuple[bool, str]:
         """Send immediate trigger, skip one acquire value
         
         Returns:
@@ -470,20 +530,38 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             sent successfully, response or error.
         """
         self.logger.debug(f'.trigger() TRIGGER INSTRUMENT STATUS: A: {self.A.check_trigger_status()}, B: {self.B.check_trigger_status()}')
-        flag, resp = self.B.check_armed(channel=self.B_smu_channels)  # Check if B is ready for trigger
+        for i in range(attempts):
+            flag, resp = self.B.check_armed(channel=self.B_smu_channels)  # Check if B is ready for trigger
+            if not flag:
+                self.logger.debug(f'attempt {i}: .trigger(): B is not armed! B status: {resp}')
+            else:
+                break
+            time.sleep(sleep_time)
         if not flag:
             self.logger.error(f'.trigger(): B is not armed! B status: {resp}')
+            self.save_logs()
             return False, f'.trigger(): B is not armed! B status: {resp}'
         resp = self.A.trigger(channel=self.A_smu_channels)  # Trigger A
         if resp.startswith('ERROR'):
             self.logger.error(f'.trigger(): A trigger error: {resp}')
+            self.save_logs()
             return False, f'.trigger(): A trigger error: {resp}'
         self.logger.debug('.trigger(): trigger sent to instrument A')
-        self.acquired_counter += 1
+        if skip_acquire:
+            self.acquired_counter += 1
         return True, 'Trigger was sent to the instruments'
         
         
-    def _set_init_values(self, mode, trigger_count, trigger_interval = None, pulse_width = None) -> None:  # TODO move to GeneralDriver (?)
+    def _set_init_values(
+        self, 
+        mode: str, 
+        trigger_count: int, 
+        trigger_interval: Union[float, None] = None, 
+        pulse_width: Union[float, None] = None, 
+        trigger_needed: bool = False, 
+        skip_one_sense: bool = False,
+        control_value: str = 'voltage'
+    ) -> None:  # TODO move to GeneralDriver (?)
         """Set initial values for the experiment configuration"""
         if mode == 'DC':
             if trigger_interval < 100e-6:
@@ -498,8 +576,8 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             else:
                 self.pulse_width = pulse_width
             if trigger_interval is not None:
-                if trigger_interval < 5 * self.pulse_width:
-                    self.trigger_interval = 5 * self.pulse_width
+                if trigger_interval < 2 * self.pulse_width:
+                    self.trigger_interval = 2 * self.pulse_width
                 else:
                     self.trigger_interval = trigger_interval
         else:
@@ -508,6 +586,9 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         self.acquired_counter = 0
         self.need_stop = False
         self.sense_size = None
+        self.trigger_needed = trigger_needed
+        self.skip_one_sense = skip_one_sense
+        self.control_value = control_value
         self.queue = []
         self.resps = []  # Response list
         # Clearing
@@ -589,6 +670,16 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         self._set_init_values(mode='DC', 
                               trigger_count = 2 * n_points if double else n_points,
                               trigger_interval = trigger_interval)
+        # Configuring apply smu
+        self.read_sign = sign
+        if sign:  # Reset
+            sweep_smu = self.BL_smu
+            zero_smu = self.NL_smu
+        else:  # Set
+            sweep_smu = self.NL_smu
+            zero_smu = self.BL_smu
+        for smu in self.A_smu_list:
+            self.resps.append(smu.set_smu_mode('voltage'))
         # Configuring triggers and source shapes
         for smu in self.smu_list:
             self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
@@ -599,23 +690,78 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         for smu in self.B_smu_list:
             self.resps.append(smu.set_arm_external(pin=self.arm_link_pin))
         # Configuring sweep
-        if sign:  # Reset
-            sweep_smu = self.BL_smu
-            zero_smu = self.NL_smu
-            self.read_side = 1
-        else:  # Set
-            sweep_smu = self.NL_smu
-            zero_smu = self.BL_smu
-            self.read_side = 2
-        self.resps.append(sweep_smu.set_sweep_voltage(stop=v_stop, n_points=n_points, start=v_start, 
-                                                      double=double, current_compliance=current_compliance))
-        self.resps.append(zero_smu.set_constant_voltage(voltage=0, current_compliance=current_compliance))
-        self.resps.append(self.gate_smu.set_constant_voltage(voltage=GATE_VOLTAGE, current_compliance=1e-6))
-        self.resps.append(self.gate_smu.set_base_voltage_immediate(voltage=GATE_VOLTAGE, current_compliance=1e-6))
+        self.resps.append(sweep_smu.set_sweep_output(stop=abs(v_stop), n_points=n_points, start=abs(v_start), 
+                                                     double=double, compliance=current_compliance))
+        self.resps.append(zero_smu.set_constant_output(output_level=0, compliance=current_compliance))
+        self.resps.append(self.gate_smu.set_constant_output(output_level=GATE_VOLTAGE, compliance=1e-6))
+        self.resps.append(self.gate_smu.set_base_output_level_immediate(output_level=GATE_VOLTAGE, compliance=1e-6))
         return self._check_config_and_start('SMU_IV_DC')
     
     
-    def mode_7(
+    def config_current_sweep(
+        self, 
+        trigger_interval: float, 
+        i_start: float, 
+        i_stop: float,
+        n_points: int,
+        double: bool,
+        voltage_compliance: float,
+        current_compliance: float = 0.1,  # 100 mA
+        sign: int = 1
+    ) -> tuple[bool, str]:
+        """Configure Current sweep (DC) mode. WARNING: Method doesn't connect the crossbar cell, 
+        it should be connected via .connect_cell() method.
+
+        Args:
+            trigger_interval (float): Interval between triggers (seconds).
+            i_start (float): Start current (Amperes).
+            i_stop (float): Stop current (Amperes).
+            n_points (int): Number of sweep points in a single direction 
+                (doubled automatically for double IV curve).
+            double (bool): True for double IV curve.
+            voltage_compliance (float): Voltage compliance (Volts).
+            current_compliance (float, optional): Current compliance which is applied on the secondary SMU connected 
+                to the memristor. Defaults to 0.1 mA.
+            sign (int, optional): Side where sweep current is applied: 1 -- BL, 0 -- NL.
+                Defaults to 1.
+                
+        Returns:
+            flag, response (tuple[bool, str]): Good_config_flag (True if instruments were 
+            successfully configured), response or error.
+        """
+        self._set_init_values(mode='DC', 
+                              trigger_count = 2 * n_points if double else n_points,
+                              trigger_interval = trigger_interval,
+                              control_value = 'current')
+        # Configuring apply SMU
+        self.read_sign = sign
+        if sign:  # Reset
+            sweep_smu = self.BL_smu
+            zero_smu = self.NL_smu
+        else:  # Set
+            sweep_smu = self.NL_smu
+            zero_smu = self.BL_smu
+        self.resps.append(sweep_smu.set_smu_mode('current'))
+        self.resps.append(zero_smu.set_smu_mode('voltage'))
+        # Configuring triggers and source shapes
+        for smu in self.smu_list:
+            self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
+                                                    acquire_delay=0.3*self.trigger_interval))
+            self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.trigger_interval))
+            self.resps.append(smu.set_source_shape('DC'))
+            self.resps.append(smu.set_measurement_range(range_type='normal'))
+        for smu in self.B_smu_list:
+            self.resps.append(smu.set_arm_external(pin=self.arm_link_pin))
+        # Configuring sweep
+        self.resps.append(sweep_smu.set_sweep_output(stop=abs(i_stop), n_points=n_points, start=abs(i_start), 
+                                                     double=double, compliance=voltage_compliance))
+        self.resps.append(zero_smu.set_constant_output(output_level=0, compliance=current_compliance))
+        self.resps.append(self.gate_smu.set_constant_output(output_level=GATE_VOLTAGE, compliance=1e-6))
+        self.resps.append(self.gate_smu.set_base_output_level_immediate(output_level=GATE_VOLTAGE, compliance=1e-6))
+        return self._check_config_and_start('SMU_Current_Sweep_DC')
+    
+    
+    def mode_7(  # TODO rework if needed
         self,
         pulse_width: float,
         apply_voltage: float,
@@ -646,6 +792,8 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         self._set_init_values(mode = 'pulse',
                               trigger_count = trigger_count,
                               pulse_width = pulse_width)
+        self.resps.append(self.BL_smu.set_smu_mode('voltage'))
+        self.resps.append(self.NL_smu.set_smu_mode('voltage'))
         # Configuring triggers and source shapes
         for smu in self.smu_list:
             self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
@@ -668,10 +816,10 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             else: # Set
                 BL_list, NL_list = [0, read_voltage], [apply_voltage, 0]
         self.read_side = 1
-        self.resps.append(self.BL_smu.set_list_voltage(BL_list, current_compliance=current_compliance))
-        self.resps.append(self.NL_smu.set_list_voltage(NL_list, current_compliance=current_compliance))
-        self.resps.append(self.gate_smu.set_constant_voltage(voltage=GATE_VOLTAGE, current_compliance=1e-6))
-        self.resps.append(self.gate_smu.set_base_voltage_immediate(voltage=GATE_VOLTAGE, current_compliance=1e-6))
+        self.resps.append(self.BL_smu.set_list_output(BL_list, compliance=current_compliance))
+        self.resps.append(self.NL_smu.set_list_output(NL_list, compliance=current_compliance))
+        self.resps.append(self.gate_smu.set_constant_output(output_level=GATE_VOLTAGE, compliance=1e-6))
+        self.resps.append(self.gate_smu.set_base_output_level_immediate(output_level=GATE_VOLTAGE, compliance=1e-6))
         # Checking if configuration is set
         config_flag, response = self._check_config_and_start('mode_7')
         if not config_flag:
@@ -687,20 +835,22 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
     
     def config_std(
         self,
-        pulse_width: float,
-        pulse_sequence: list[float],
-        read_flags: list[bool],
+        volt_array: list[float],
         current_compliance: float,
+        pulse_width: float,
+        read_voltage: float,
+        read_direction: float,
         sign: int = 1
     ) -> tuple[bool, str]:
         """Configure std mode (apply pulse + read pulse). WARNING: Method doesn't connect the 
         crossbar cell, it should be connected via .connect_cell() method.
 
         Args:
-            pulse_width (float): Pulse width (seconds).
-            pulse_sequence (list[float]): Pulse sequence, read pulses are also included here (Volts).
-            read_flags (list[bool]): The flag is True if the pulse in the pulse sequence in a read pulse.
+            volt_array (list[float]): Array of switch voltages to apply (no read pulses).
             current_compliance (float): Current compliance (Amperes).
+            pulse_width (float): Pulse width (seconds).
+            read_voltage (float): Read voltage (Read pulse is applied after each switch pulse).
+            read_direction (int): Side where read pulse is applied: 1 -- 'BL', 0 -- 'NL'. 
             sign (int, optional): Side where sweep voltage is applied: 1 -- 'BL', 0 -- 'NL'. 
                 Defaults to 1.
 
@@ -708,13 +858,24 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             tuple[bool, str]: Good_config_flag (True if instruments were
             successfully configured), response or error.
         """
+        # Creating real pulse sequence
+        pulse_sequences = {0: [], 1: []}  # Pulse sequences for each sign
+        for v in volt_array:
+            pulse_sequences[sign].append(abs(v))
+            pulse_sequences[int(not sign)].append(0)
+            pulse_sequences[read_direction].append(abs(read_voltage))
+            pulse_sequences[int(not read_direction)].append(0)
+        self.read_sign = read_direction
         self._set_init_values(mode = 'pulse',
-                              trigger_count = len(pulse_sequence),
-                              pulse_width = pulse_width)
+                              trigger_count = len(pulse_sequences[0]),
+                              pulse_width = pulse_width,
+                              trigger_needed = True,
+                              skip_one_sense = True)
         # Triggers and source shapes
         for smu in self.smu_list:
             self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.pulse_width))
         for smu in self.A_smu_list:
+            self.resps.append(smu.set_smu_mode('voltage'))
             self.resps.append(smu.set_trigger_BUS(self.trigger_count, acquire_delay=0.3*self.pulse_width))
             self.resps.append(smu.set_source_shape('pulse'))
             self.resps.append(smu.set_pulse_config(width=self.pulse_width))
@@ -725,23 +886,10 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                                                        acquire_delay=0.3*self.pulse_width))
             self.resps.append(smu.set_arm_BUS())
         # Voltage config
-        self.read_side = 1  # Read on reset
-        BL_seq, NL_seq = [], []
-        for pulse, read_flag in zip(pulse_sequence, read_flags):
-            if read_flag:
-                BL_seq.append(pulse)
-                NL_seq.append(0)
-            else:
-                if sign:
-                    BL_seq.append(pulse)
-                    NL_seq.append(0)
-                else:
-                    BL_seq.append(0)
-                    NL_seq.append(pulse)
-        self.resps.append(self.BL_smu.set_list_voltage(BL_seq, current_compliance=current_compliance))
-        self.resps.append(self.NL_smu.set_list_voltage(NL_seq, current_compliance=current_compliance))
-        self.resps.append(self.gate_smu.set_constant_voltage(voltage=GATE_VOLTAGE, current_compliance=1e-6))
-        self.resps.append(self.gate_smu.set_base_voltage_immediate(voltage=GATE_VOLTAGE, current_compliance=1e-6))
+        self.resps.append(self.BL_smu.set_list_output(pulse_sequences[1], compliance=current_compliance))
+        self.resps.append(self.NL_smu.set_list_output(pulse_sequences[0], compliance=current_compliance))
+        self.resps.append(self.gate_smu.set_constant_output(output_level=GATE_VOLTAGE, compliance=1e-6))
+        self.resps.append(self.gate_smu.set_base_output_level_immediate(output_level=GATE_VOLTAGE, compliance=1e-6))
         flag, resp = self._check_config_and_start('SMU_std', arm_B=True)
         return flag, resp
     
@@ -750,7 +898,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         self,
         pulse_width: float,
         current_compliance: float,
-        n_pulses: int,
+        count: int,
         read_voltage: float,
         sign: int = 1,
         trigger_interval: float = 0
@@ -761,21 +909,21 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         Args:
             pulse_width (float): Pulse width (seconds).
             current_compliance (float): Current compliance (Amperes).
-            n_pulses (int): Number of read pulses.
+            count (int): Number of read pulses.
             read_voltage (float): Read voltage (Volts).
-            sign (int, optional): Side where sweep voltage is applied: 1 -- 'BL', 0 -- 'NL'. 
+            sign (int, optional): Side where voltage is applied: 1 -- 'BL', 0 -- 'NL'. 
                 Defaults to 1.
             trigger_interval (float, optional): Trigger interval (seconds). If less then 5 * pulse_width,
-                falls back to 5 * pulse_width. Defaults to 0.
+                falls back to 2 * pulse_width. Defaults to 0.
 
         Returns:
             tuple[bool, str]: Good_config_flag (True if instruments were
             successfully configured), response or error.
         """
         self._set_init_values(mode = 'pulse',
-                              trigger_count = n_pulses,
+                              trigger_count = count,
                               pulse_width = pulse_width,
-                              trigger_interval=trigger_interval)
+                              trigger_interval = trigger_interval)
         # Configuring triggers and source shapes
         for smu in self.smu_list:
             self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
@@ -786,15 +934,22 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             self.resps.append(smu.set_arm_external(pin=self.arm_link_pin))
         # Pulse mode for BL and NL
         for smu in self.A_smu_list:
+            self.resps.append(smu.set_smu_mode('voltage'))
             self.resps.append(smu.set_source_shape('pulse'))
             self.resps.append(smu.set_pulse_config(width=self.pulse_width))
             self.resps.append(smu.set_measurement_range(range_type='speed'))
         # Voltage config
-        self.read_side = 1  # Read on reset
-        self.resps.append(self.BL_smu.set_list_voltage([read_voltage] * n_pulses, current_compliance=current_compliance))
-        self.resps.append(self.NL_smu.set_list_voltage([0] * n_pulses, current_compliance=current_compliance))
-        self.resps.append(self.gate_smu.set_constant_voltage(voltage=GATE_VOLTAGE, current_compliance=1e-6))
-        self.resps.append(self.gate_smu.set_base_voltage_immediate(voltage=GATE_VOLTAGE, current_compliance=1e-6))
+        self.read_sign = sign
+        if sign:  # Reset:
+            BL_sequence = [abs(read_voltage)] * count
+            NL_sequence = [0] * count
+        else:
+            BL_sequence = [0] * count
+            NL_sequence = [abs(read_voltage)] * count
+        self.resps.append(self.BL_smu.set_list_output(BL_sequence, compliance=current_compliance))
+        self.resps.append(self.NL_smu.set_list_output(NL_sequence, compliance=current_compliance))
+        self.resps.append(self.gate_smu.set_constant_output(output_level=GATE_VOLTAGE, compliance=1e-6))
+        self.resps.append(self.gate_smu.set_base_output_level_immediate(output_level=GATE_VOLTAGE, compliance=1e-6))
         return self._check_config_and_start('SMU_pulsed_retention')
     
     
@@ -802,11 +957,13 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         self,
         v_dir: float,
         v_rev: float,
-        read_voltage: Union[float, str],
-        n_cycles: int,
         dir_cc: float,
         rev_cc: float,
         pulse_width: float,
+        read_voltage: Union[float, str],
+        read_direction: int,
+        reverse: bool,
+        count: int,
         trigger_interval: Union[float, None] = None
     ) -> tuple[bool, str]:
         """Configure endurance mode. WARNING: Method doesn't connect the crossbar cell, 
@@ -815,19 +972,23 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         Args:
             v_dir (float): Direct voltage in Volts (set).
             v_rev (float): Reverse voltage in Volts (reset).
-            read_voltage (Union[float, str]): Read voltage (reads on reset).
-            n_cycles (int): Number of endurance cycles.
             dir_cc (float): Direct current compliance in Amperes (set).
             rev_cc (float): Reverse current compliance in Amperes (reset).
             pulse_width (float): Pulse width (seconds).
+            read_voltage (Union[float, str]): Read voltage (reads on reset).
+            read_direction (int): Side where read voltage is applied: 1 -- BL, 0 -- NL. 
+                Defaults to 1.
+            reverse (int): 0 -- positive switch - negative switch cycle; 1 -- negative switch - positive switch cycle
+            count (int): Number of endurance cycles.
             trigger_interval (Union[float, None]): Trigger interval, seconds (5 * pulse_width if None). Defaults to None.
 
         Returns:
             tuple[bool, str]: Good_config_flag (True if instruments were
             successfully configured), response or error.
         """
-        self._set_init_values(mode='pulse', trigger_count=4*n_cycles,
-                              pulse_width=pulse_width, trigger_interval=trigger_interval)
+        self._set_init_values(mode='pulse', trigger_count=4*count,
+                              pulse_width=pulse_width, trigger_interval=trigger_interval,
+                              skip_one_sense=True)
         # Configuring triggers and source shapes
         for smu in self.smu_list:
             self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
@@ -838,27 +999,40 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             self.resps.append(smu.set_arm_external(pin=self.arm_link_pin))
         # Pulse mode for BL and NL
         for smu in self.A_smu_list:
+            self.resps.append(smu.set_smu_mode('voltage'))
             self.resps.append(smu.set_source_shape('pulse'))
             self.resps.append(smu.set_pulse_config(width=self.pulse_width))
             self.resps.append(smu.set_measurement_range(range_type='speed'))
         # Voltage config
-        self.read_side = 1  # Read on reset
-        BL_seq = [0, abs(float(read_voltage)), abs(float(v_rev)), abs(float(read_voltage))] * n_cycles
-        NL_seq = [abs(float(v_dir)), 0, 0, 0] * n_cycles
-        self.resps.append(self.BL_smu.set_list_voltage(voltage_list=BL_seq, 
-                                                       current_compliance=rev_cc,
-                                                       negative_current_compliance=dir_cc))
-        self.resps.append(self.NL_smu.set_list_voltage(voltage_list=NL_seq, 
-                                                       current_compliance=dir_cc,
-                                                       negative_current_compliance=rev_cc))
+        self.read_sign = read_direction
+        if reverse:  # rev-dir sequence
+            if read_direction:  # Read on BL
+                BL_seq = [abs(v_rev), abs(read_voltage), 0, abs(read_voltage)] * count
+                NL_seq = [0, 0, abs(v_dir), 0] * count
+            else:  # Read on NL
+                BL_seq = [abs(v_rev), 0, 0, 0] * count
+                NL_seq = [0, abs(read_voltage), abs(v_dir), abs(read_voltage)] * count
+        else:  # dir-rev sequence
+            if read_direction:  # Read on BL
+                BL_seq = [0, abs(read_voltage), abs(v_rev), abs(read_voltage)] * count
+                NL_seq = [abs(v_dir), 0, 0, 0] * count
+            else:  # Read on NL
+                BL_seq = [0, 0, abs(v_rev), 0] * count
+                NL_seq = [abs(v_dir), abs(read_voltage), 0, abs(read_voltage)] * count
+        self.resps.append(self.BL_smu.set_list_output(output_list=BL_seq, 
+                                                      compliance=rev_cc,
+                                                      negative_compliance=dir_cc))
+        self.resps.append(self.NL_smu.set_list_output(output_list=NL_seq, 
+                                                      compliance=dir_cc,
+                                                      negative_compliance=rev_cc))
         return self._check_config_and_start('SMU_endurance')
     
     
     def config_pot_dep(
         self,
         voltage: float,
-        n_pulses: int,
         compliance: float,
+        count: int,
         sign: int,
         pulse_width: float,
         trigger_interval: Union[float, None] = None
@@ -868,8 +1042,8 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
 
         Args:
             voltage (float): Voltage in Volts.
-            n_pulses (int): Number of pulses.
             compliance (float): Current compliance in Amperes.
+            count (int): Number of pulses.
             sign (int): 0 for Set, 1 for Reset.
             pulse_width (float): Pulse width (seconds).
             trigger_interval (Union[float, None]): Trigger interval, seconds (5 * pulse_width if None). Defaults to None.
@@ -878,7 +1052,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             tuple[bool, str]: Good_config_flag (True if instruments were
             successfully configured), response or error.
         """
-        self._set_init_values(mode='pulse', trigger_count=n_pulses,
+        self._set_init_values(mode='pulse', trigger_count=count,
                               pulse_width=pulse_width, trigger_interval=trigger_interval)
         # Configuring triggers and source shapes
         for smu in self.smu_list:
@@ -890,20 +1064,20 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             self.resps.append(smu.set_arm_external(pin=self.arm_link_pin))
         # Pulse mode for BL and NL
         for smu in self.A_smu_list:
+            self.resps.append(smu.set_smu_mode('voltage'))
             self.resps.append(smu.set_source_shape('pulse'))
             self.resps.append(smu.set_pulse_config(width=self.pulse_width))
             self.resps.append(smu.set_measurement_range(range_type='speed'))
         # Voltage config
-        if sign == 0:  # Set
-            self.read_side = 2
-            NL_seq = [abs(float(voltage))] * n_pulses
-            BL_seq = [0] * n_pulses
-        else:  # Reset
-            self.read_side = 1
-            BL_seq = [abs(float(voltage))] * n_pulses
-            NL_seq = [0] * n_pulses
-        self.resps.append(self.BL_smu.set_list_voltage(voltage_list=BL_seq, 
-                                                       current_compliance=compliance))
-        self.resps.append(self.NL_smu.set_list_voltage(voltage_list=NL_seq, 
-                                                       current_compliance=compliance))
+        self.read_sign = sign
+        if sign:  # Apply to BL
+            BL_seq = [abs(voltage)] * count
+            NL_seq = [0] * count
+        else:  # Apply to NL
+            BL_seq = [0] * count
+            NL_seq = [abs(voltage)] * count
+        self.resps.append(self.BL_smu.set_list_output(output_list=BL_seq, 
+                                                      compliance=compliance))
+        self.resps.append(self.NL_smu.set_list_output(output_list=NL_seq, 
+                                                      compliance=compliance))
         return self._check_config_and_start('SMU_pot_dep')

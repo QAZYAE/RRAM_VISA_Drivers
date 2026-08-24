@@ -29,6 +29,7 @@ class ITC_probe_station(GeneralDriver):
         acquired_counter (int): Number of resistances acquired via sense(). Resets on config or clear.
         trigger_needed (bool): If True, a trigger is sent before each .sense().
         skip_one_sense (bool): If True, one sense value is skipped on each .sense() (for pulse sequences switch+read).
+        sign (int): Sign of the read values in current experiment.
         control_value (str): Unit which is controlled in the experiment (voltage or current).
         need_stop (bool): Flag that can be set to True for GUI. Used if the driver is stuck in
             acquire loop and user wants to stop the experiment.
@@ -44,6 +45,7 @@ class ITC_probe_station(GeneralDriver):
     acquired_counter: int = 0
     trigger_needed: bool = False
     skip_one_sense: bool = False
+    sign: int = 0
     control_value: str = 'voltage'
     need_stop: bool = False
     sense_size: Union[int, None] = None
@@ -339,12 +341,21 @@ class ITC_probe_station(GeneralDriver):
             if self.sim:
                 sense1, sense2 = self._random_sense(vol=vol)
             else:  # Acquire from real instruments
+                if self.skip_one_sense:
+                    self.acquired_counter += 1
                 # Trigger
                 if self.trigger_needed:
                     self.logger.debug('SENSE TRIGGER')
-                    flag, response = self.trigger(skip_acquire=self.skip_one_sense)
-                    if not flag:
-                        return response
+                    if self.skip_one_sense:
+                        f1, r1 = self.trigger()
+                        f2, r2 = self.trigger()
+                        flag = f1 and f2
+                        if not flag:
+                            return str(r1) + str(r2)
+                    else:
+                        flag, response = self.trigger()
+                        if not flag:
+                            return response
                 # ACQUIRE
                 for i in range(acquire_attempts):
                     sense_data_A = self.A.get_sense_data(channels=self.smu_channels, offset=self.acquired_counter, size=self.sense_size)  # sense_ch1, sense_ch2
@@ -402,7 +413,7 @@ class ITC_probe_station(GeneralDriver):
                     r = np.inf
                 else:
                     if vol is not None:
-                        r = vol / cur
+                        r = signed(vol, self.sign) / cur
                     else:
                         r = v / cur
             else:  # Controlling current, vol is current
@@ -410,7 +421,7 @@ class ITC_probe_station(GeneralDriver):
                     if vol == 0:
                         r = np.inf
                     else:
-                        r = v / vol  # Voltage over current
+                        r = v / signed(vol, self.sign)  # Voltage over current
                 else:
                     r = v / cur  
             if r <= 0:
@@ -424,7 +435,7 @@ class ITC_probe_station(GeneralDriver):
             return 'Sense queue is empty!'
         
         
-    def trigger(self, skip_acquire: bool = True, attempts: int = 200, sleep_time: float = 0.001) -> tuple[bool, str]:
+    def trigger(self, attempts: int = 200, sleep_time: float = 0.001) -> tuple[bool, str]:
         """Send immediate trigger, skip one acquire value
         
         Returns:
@@ -449,8 +460,6 @@ class ITC_probe_station(GeneralDriver):
             self.save_logs()
             return False, f'.sense(): A trigger error: {resp}'
         self.logger.debug('.trigger(): trigger sent to instrument A')
-        if skip_acquire:
-            self.acquired_counter += 1
         return True, 'Trigger was sent to the instruments'
     
     
@@ -563,6 +572,7 @@ class ITC_probe_station(GeneralDriver):
                               trigger_interval = trigger_interval)
         # Configuring triggers and source shapes
         self.resps.append(self.mem_smu.set_smu_mode('voltage'))
+        self.sign = sign
         for smu in self.smu_list:
             self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
                                                     acquire_delay=0.3*self.trigger_interval))
@@ -610,6 +620,7 @@ class ITC_probe_station(GeneralDriver):
                               trigger_count = 2 * n_points if double else n_points,
                               trigger_interval = trigger_interval,
                               control_value = 'current')
+        self.sign = sign
         # Configuring triggers and source shapes
         self.resps.append(self.mem_smu.set_smu_mode('current'))
         for smu in self.smu_list:
@@ -726,6 +737,7 @@ class ITC_probe_station(GeneralDriver):
                               pulse_width = pulse_width,
                               trigger_needed = True,
                               skip_one_sense = True)
+        self.sign = read_direction
         # Triggers and source shapes
         self.resps.append(self.mem_smu.set_smu_mode('voltage'))
         for smu in self.smu_list:
@@ -772,6 +784,7 @@ class ITC_probe_station(GeneralDriver):
                               trigger_count = count,
                               pulse_width = pulse_width,
                               trigger_interval = trigger_interval)
+        self.sign = sign
         # Configuring triggers and source shapes
         self.resps.append(self.mem_smu.set_smu_mode('voltage'))
         for smu in self.smu_list:
@@ -827,6 +840,7 @@ class ITC_probe_station(GeneralDriver):
                               skip_one_sense=True)
         # Configuring triggers and source shapes
         self.resps.append(self.mem_smu.set_smu_mode('voltage'))
+        self.sign = read_direction
         for smu in self.smu_list:
             self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
                                                acquire_delay=0.3*self.pulse_width))
@@ -876,6 +890,7 @@ class ITC_probe_station(GeneralDriver):
             """
             self._set_init_values(mode='pulse', trigger_count=count,
                                 pulse_width=pulse_width, trigger_interval=trigger_interval)
+            self.sign = sign
             # Configuring triggers and source shapes
             self.resps.append(self.mem_smu.set_smu_mode('voltage'))
             for smu in self.smu_list:
@@ -891,5 +906,5 @@ class ITC_probe_station(GeneralDriver):
             # Voltage config
             voltage_list = [signed(voltage, sign)] * count
             self.resps.append(self.mem_smu.set_list_output(output_list=voltage_list, 
-                                                           current_compliance=compliance))
+                                                           compliance=compliance))
             return self._check_config_and_start('SMU_pot_dep')

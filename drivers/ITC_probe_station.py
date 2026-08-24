@@ -30,6 +30,8 @@ class ITC_probe_station(GeneralDriver):
         trigger_needed (bool): If True, a trigger is sent before each .sense().
         skip_one_sense (bool): If True, one sense value is skipped on each .sense() (for pulse sequences switch+read).
         sign (int): Sign of the read values in current experiment.
+        read_control_value (float | None): This variable contains voltage or current applied during read pulse, used to calculate resistance.
+            If None resistance is calculated by 'vol' variable passed to .sense() method.
         control_value (str): Unit which is controlled in the experiment (voltage or current).
         need_stop (bool): Flag that can be set to True for GUI. Used if the driver is stuck in
             acquire loop and user wants to stop the experiment.
@@ -46,6 +48,7 @@ class ITC_probe_station(GeneralDriver):
     trigger_needed: bool = False
     skip_one_sense: bool = False
     sign: int = 0
+    read_control_value: Union[float, None] = None
     control_value: str = 'voltage'
     need_stop: bool = False
     sense_size: Union[int, None] = None
@@ -323,6 +326,40 @@ class ITC_probe_station(GeneralDriver):
         return np.array(sense1), np.array(sense2)
     
     
+    def _res_for_plot(self, data: tuple, vol_cur: Union[float, None] = None) -> float:
+        """Get resistance for plot based on SMU data and controlled voltage or current"""
+        smu_vol = data[1]  # SMU voltage
+        smu_cur = data[2]  # SMU current
+        if self.control_value == 'voltage':  # Controlling voltage, vol_cur is voltage
+            if smu_cur == 0:
+                r = np.inf
+            else:
+                if self.read_control_value is None:  # Calculate by vol_cur
+                    if vol_cur is None:  # Calculate by smu voltage and current
+                        r = smu_vol / smu_cur
+                    else:  # Calculate by vol_cur voltage and smu current
+                        r = signed(vol_cur, self.sign) / smu_cur
+                else:  # Calculate by read_control_value (voltage)
+                    r = self.read_control_value / smu_cur
+        else:  # Controlling current, vol_cur is current
+            if smu_vol == 0:
+                r = np.inf
+            else:
+                if self.read_control_value is None:  # Calculate by vol_cur
+                    if vol_cur is None:  # Calculate by smu current
+                        r = smu_vol / smu_cur
+                    else:  # Calculate by vol_cur current and smu voltage
+                        if vol_cur == 0:
+                            r = np.inf
+                        else:
+                            r = smu_vol / signed(vol_cur, self.sign)
+                else:  # Calculate by read_control_value (current)
+                    r = smu_vol / self.read_control_value
+        if r <= 0:
+            r = np.inf
+        return r
+    
+    
     def sense(self, acquire_attempts: int = 200, vol: Union[float, None] = None) -> Union[tuple[float], str]:
         """Read sense data from the instrument. Updates the result queue and returns a 
             result from the queue.
@@ -348,6 +385,7 @@ class ITC_probe_station(GeneralDriver):
                     self.logger.debug('SENSE TRIGGER')
                     if self.skip_one_sense:
                         f1, r1 = self.trigger()
+                        time.sleep(1.1*self.trigger_interval)
                         f2, r2 = self.trigger()
                         flag = f1 and f2
                         if not flag:
@@ -406,26 +444,7 @@ class ITC_probe_station(GeneralDriver):
         try:
             self.logger.debug(f'ACQUIRED COUNTER (AFT): {self.acquired_counter}')
             data_to_send = self.queue.pop(0)
-            v = data_to_send[1]
-            cur = data_to_send[2]
-            if self.control_value == 'voltage':
-                if cur == 0:
-                    r = np.inf
-                else:
-                    if vol is not None:
-                        r = signed(vol, self.sign) / cur
-                    else:
-                        r = v / cur
-            else:  # Controlling current, vol is current
-                if vol is not None:
-                    if vol == 0:
-                        r = np.inf
-                    else:
-                        r = v / signed(vol, self.sign)  # Voltage over current
-                else:
-                    r = v / cur  
-            if r <= 0:
-                r = np.inf
+            r = self._res_for_plot(data_to_send, vol_cur=vol)
             self.logger.info(f'Data returned: {[r, *data_to_send]}')
             # self.logger.warning(f'Temperature: {data_to_send[4]} C')
             # print(f'Temperature: {data_to_send[4]} C')
@@ -573,6 +592,7 @@ class ITC_probe_station(GeneralDriver):
         # Configuring triggers and source shapes
         self.resps.append(self.mem_smu.set_smu_mode('voltage'))
         self.sign = sign
+        self.read_control_value = None
         for smu in self.smu_list:
             self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
                                                     acquire_delay=0.3*self.trigger_interval))
@@ -621,6 +641,7 @@ class ITC_probe_station(GeneralDriver):
                               trigger_interval = trigger_interval,
                               control_value = 'current')
         self.sign = sign
+        self.read_control_value = None
         # Configuring triggers and source shapes
         self.resps.append(self.mem_smu.set_smu_mode('current'))
         for smu in self.smu_list:
@@ -738,6 +759,7 @@ class ITC_probe_station(GeneralDriver):
                               trigger_needed = True,
                               skip_one_sense = True)
         self.sign = read_direction
+        self.read_control_value = signed(read_voltage, read_direction)
         # Triggers and source shapes
         self.resps.append(self.mem_smu.set_smu_mode('voltage'))
         for smu in self.smu_list:
@@ -785,6 +807,7 @@ class ITC_probe_station(GeneralDriver):
                               pulse_width = pulse_width,
                               trigger_interval = trigger_interval)
         self.sign = sign
+        self.read_control_value = signed(read_voltage, sign)
         # Configuring triggers and source shapes
         self.resps.append(self.mem_smu.set_smu_mode('voltage'))
         for smu in self.smu_list:
@@ -841,6 +864,7 @@ class ITC_probe_station(GeneralDriver):
         # Configuring triggers and source shapes
         self.resps.append(self.mem_smu.set_smu_mode('voltage'))
         self.sign = read_direction
+        self.read_control_value = signed(read_voltage, read_direction)
         for smu in self.smu_list:
             self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
                                                acquire_delay=0.3*self.pulse_width))
@@ -865,46 +889,47 @@ class ITC_probe_station(GeneralDriver):
     
     
     def config_pot_dep(
-            self,
-            voltage: float,
-            compliance: float,
-            count: int,
-            sign: int,
-            pulse_width: float,
-            trigger_interval: Union[float, None] = None
-        ) -> tuple[bool, str]:
-            """Configure endurance mode. WARNING: Method doesn't connect the crossbar cell, 
-            it should be connected via .connect_cell() method.
+        self,
+        voltage: float,
+        compliance: float,
+        count: int,
+        sign: int,
+        pulse_width: float,
+        trigger_interval: Union[float, None] = None
+    ) -> tuple[bool, str]:
+        """Configure endurance mode. WARNING: Method doesn't connect the crossbar cell, 
+        it should be connected via .connect_cell() method.
 
-            Args:
-                voltage (float): Voltage in Volts.
-                count (int): Number of pulses.
-                compliance (float): Current compliance in Amperes.
-                sign (int): 0 for Set, 1 for Reset.
-                pulse_width (float): Pulse width (seconds).
-                trigger_interval (Union[float, None]): Trigger interval, seconds (5 * pulse_width if None). Defaults to None.
+        Args:
+            voltage (float): Voltage in Volts.
+            count (int): Number of pulses.
+            compliance (float): Current compliance in Amperes.
+            sign (int): 0 for Set, 1 for Reset.
+            pulse_width (float): Pulse width (seconds).
+            trigger_interval (Union[float, None]): Trigger interval, seconds (5 * pulse_width if None). Defaults to None.
 
-            Returns:
-                tuple[bool, str]: Good_config_flag (True if instruments were
-                successfully configured), response or error.
-            """
-            self._set_init_values(mode='pulse', trigger_count=count,
-                                pulse_width=pulse_width, trigger_interval=trigger_interval)
-            self.sign = sign
-            # Configuring triggers and source shapes
-            self.resps.append(self.mem_smu.set_smu_mode('voltage'))
-            for smu in self.smu_list:
-                self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
-                                                        acquire_delay=0.3*self.pulse_width))
-                self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.pulse_width))
-            if self.enable_temperature:
-                self.resps.append(self.temp_smu.set_source_shape('DC'))
-            # Pulse mode for BL and NL
-            self.resps.append(self.mem_smu.set_source_shape('pulse'))
-            self.resps.append(self.mem_smu.set_pulse_config(width=self.pulse_width))
-            self.resps.append(self.mem_smu.set_measurement_range(range_type='speed'))
-            # Voltage config
-            voltage_list = [signed(voltage, sign)] * count
-            self.resps.append(self.mem_smu.set_list_output(output_list=voltage_list, 
-                                                           compliance=compliance))
-            return self._check_config_and_start('SMU_pot_dep')
+        Returns:
+            tuple[bool, str]: Good_config_flag (True if instruments were
+            successfully configured), response or error.
+        """
+        self._set_init_values(mode='pulse', trigger_count=count,
+                            pulse_width=pulse_width, trigger_interval=trigger_interval)
+        self.sign = sign
+        self.read_control_value = None
+        # Configuring triggers and source shapes
+        self.resps.append(self.mem_smu.set_smu_mode('voltage'))
+        for smu in self.smu_list:
+            self.resps.append(smu.set_trigger_timer(interval=self.trigger_interval, count=self.trigger_count,
+                                                    acquire_delay=0.3*self.pulse_width))
+            self.resps.append(smu.set_measurement_aperture(aperture=0.4*self.pulse_width))
+        if self.enable_temperature:
+            self.resps.append(self.temp_smu.set_source_shape('DC'))
+        # Pulse mode for BL and NL
+        self.resps.append(self.mem_smu.set_source_shape('pulse'))
+        self.resps.append(self.mem_smu.set_pulse_config(width=self.pulse_width))
+        self.resps.append(self.mem_smu.set_measurement_range(range_type='speed'))
+        # Voltage config
+        voltage_list = [signed(voltage, sign)] * count
+        self.resps.append(self.mem_smu.set_list_output(output_list=voltage_list, 
+                                                        compliance=compliance))
+        return self._check_config_and_start('SMU_pot_dep')

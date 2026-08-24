@@ -32,6 +32,8 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         trigger_needed (bool): If True, a trigger is sent before each .sense().
         skip_one_sense (bool): If True, one sense value is skipped on each .sense() (for pulse sequences switch+read).
         control_value (str): Unit which is controlled in the experiment (voltage or current).
+        read_control_value (float | None): This variable contains voltage or current applied during read pulse, used to calculate resistance.
+            If None resistance is calculated by 'vol' variable passed to .sense() method.
         read_sign (int): SMU to read current from when using .sense() 1 for BL (RESET), or 0 for NL (SET).
         need_stop (bool): Flag that can be set to True for GUI. Used if the driver is stuck in 
             acquire loop and user wants to stop the experiment.
@@ -51,6 +53,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
     trigger_needed: bool = False
     skip_one_sense: bool = False
     control_value: str = 'voltage'
+    read_control_value: Union[float, None] = None
     read_sign: int = 1
     need_stop: bool = False
     sense_size: Union[int, None] = None
@@ -373,6 +376,40 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         else:
             sense1, sense2 = [np.nan, np.nan], [np.nan, np.nan]
         return np.array(sense1), np.array(sense2)
+    
+    
+    def _res_for_plot(self, data: tuple, vol_cur: Union[float, None] = None) -> float:
+        """Get resistance for plot based on SMU data and controlled voltage or current"""
+        smu_vol = data[1]  # SMU voltage
+        smu_cur = data[2]  # SMU current
+        if self.control_value == 'voltage':  # Controlling voltage, vol_cur is voltage
+            if smu_cur == 0:
+                r = np.inf
+            else:
+                if self.read_control_value is None:  # Calculate by vol_cur
+                    if vol_cur is None:  # Calculate by smu voltage and current
+                        r = smu_vol / smu_cur
+                    else:  # Calculate by vol_cur voltage and smu current
+                        r = vol_cur / smu_cur
+                else:  # Calculate by read_control_value (voltage)
+                    r = self.read_control_value / smu_cur
+        else:  # Controlling current, vol_cur is current
+            if smu_vol == 0:
+                r = np.inf
+            else:
+                if self.read_control_value is None:  # Calculate by vol_cur
+                    if vol_cur is None:  # Calculate by smu current
+                        r = smu_vol / smu_cur
+                    else:  # Calculate by vol_cur current and smu voltage
+                        if vol_cur == 0:
+                            r = np.inf
+                        else:
+                            r = smu_vol / vol_cur
+                else:  # Calculate by read_control_value (current)
+                    r = smu_vol / self.read_control_value
+        if r <= 0:
+            r = np.inf
+        return r
         
         
     def sense(self, acquire_attempts: int = 200, vol: Union[float, None] = None) -> Union[tuple[float, float], str]:
@@ -394,6 +431,8 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                 sense1, sense2 = self._random_sense(vol=vol)
                 sense1_B, sense2_B = self._random_sense(include_time=False)
             else:  # Acquire from instruments
+                if self.skip_one_sense:
+                    self.acquired_counter += 1
                 # Trigger
                 if self.trigger_needed:
                     self.logger.debug(f'SENSE TRIGGER INSTRUMENT STATUS: A: {self.A.check_trigger_status()}, B: {self.B.check_trigger_status()}')
@@ -401,12 +440,21 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                     if not flag:
                         self.logger.error(f'.sense(): B is not armed! B status: {resp}')
                         return f'.sense(): B is not armed! B status: {resp}'
-                    resp = self.A.trigger(channel=self.A_smu_channels)  # Trigger A
-                    if resp.startswith('ERROR'):
-                        self.logger.error(f'.sense(): A trigger error: {resp}')
-                        return f'.sense(): A trigger error: {resp}'
+                    if self.skip_one_sense:
+                        r1 = self.A.trigger(channel=self.A_smu_channels)  # Trigger A
+                        time.sleep(1.1*self.trigger_interval)
+                        r2 = self.A.trigger(channel=self.A_smu_channels)  # Trigger A
+                        self.logger.debug('A is triggered twice')
+                        for resp in [r1, r2]:
+                            if resp.startswith('ERROR'):
+                                self.logger.error(f'.sense(): A trigger error: {resp}')
+                                return f'.sense(): A trigger error: {resp}'
                     else:
                         self.logger.debug('Sense: Trigger sent to instrument A')
+                        resp = self.A.trigger(channel=self.A_smu_channels)  # Trigger A
+                        if resp.startswith('ERROR'):
+                            self.logger.error(f'.sense(): A trigger error: {resp}')
+                            return f'.sense(): A trigger error: {resp}'
                 # ACQUIRE
                 # ACQUIRE A
                 for i in range(acquire_attempts):
@@ -493,26 +541,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             # Sending data
             self.logger.debug(f'ACQUIRED COUNTER (AFT): {self.acquired_counter}')
             data_to_send = self.queue.pop(0)
-            v = data_to_send[1]
-            cur = data_to_send[2]
-            if self.control_value == 'voltage':
-                if cur == 0:
-                    r = np.inf
-                else:
-                    if vol is not None:
-                        r = vol / cur
-                    else:
-                        r = v / cur
-            else:  # Controlling current, vol is current
-                if vol is not None:
-                    if vol == 0:
-                        r = np.inf
-                    else:
-                        r = v / vol  # Voltage over current
-                else:
-                    r = v / cur  
-            if r <= 0:
-                r = np.inf
+            r = self._res_for_plot(data_to_send, vol_cur = vol)
             self.logger.info(f'Data returned: {[r, *data_to_send]}')
             # self.logger.warning(f'Temperature: {data_to_send[4]} C')
             # print(f'Temperature: {data_to_send[4]} C')
@@ -672,6 +701,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                               trigger_interval = trigger_interval)
         # Configuring apply smu
         self.read_sign = sign
+        self.read_control_value = None
         if sign:  # Reset
             sweep_smu = self.BL_smu
             zero_smu = self.NL_smu
@@ -735,6 +765,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                               control_value = 'current')
         # Configuring apply SMU
         self.read_sign = sign
+        self.read_control_value = None
         if sign:  # Reset
             sweep_smu = self.BL_smu
             zero_smu = self.NL_smu
@@ -866,6 +897,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             pulse_sequences[read_direction].append(abs(read_voltage))
             pulse_sequences[int(not read_direction)].append(0)
         self.read_sign = read_direction
+        self.read_control_value = read_voltage
         self._set_init_values(mode = 'pulse',
                               trigger_count = len(pulse_sequences[0]),
                               pulse_width = pulse_width,
@@ -940,6 +972,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             self.resps.append(smu.set_measurement_range(range_type='speed'))
         # Voltage config
         self.read_sign = sign
+        self.read_control_value = read_voltage
         if sign:  # Reset:
             BL_sequence = [abs(read_voltage)] * count
             NL_sequence = [0] * count
@@ -1005,6 +1038,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             self.resps.append(smu.set_measurement_range(range_type='speed'))
         # Voltage config
         self.read_sign = read_direction
+        self.read_control_value = read_voltage
         if reverse:  # rev-dir sequence
             if read_direction:  # Read on BL
                 BL_seq = [abs(v_rev), abs(read_voltage), 0, abs(read_voltage)] * count
@@ -1070,6 +1104,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             self.resps.append(smu.set_measurement_range(range_type='speed'))
         # Voltage config
         self.read_sign = sign
+        self.read_control_value = None
         if sign:  # Apply to BL
             BL_seq = [abs(voltage)] * count
             NL_seq = [0] * count

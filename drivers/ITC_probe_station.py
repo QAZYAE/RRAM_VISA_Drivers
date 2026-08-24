@@ -350,13 +350,13 @@ class ITC_probe_station(GeneralDriver):
                         r = smu_vol / smu_cur
                     else:  # Calculate by vol_cur current and smu voltage
                         if vol_cur == 0:
-                            r = np.inf
+                            r = 0
                         else:
                             r = smu_vol / signed(vol_cur, self.sign)
                 else:  # Calculate by read_control_value (current)
                     r = smu_vol / self.read_control_value
         if r <= 0:
-            r = np.inf
+            r = 0
         return r
     
     
@@ -374,12 +374,10 @@ class ITC_probe_station(GeneralDriver):
         """
         sleep_time = 0.1 * self.trigger_interval
         self.logger.debug(f'ACQUIRED_COUNTER (BEFORE): {self.acquired_counter}, (trigger_count: {self.trigger_count})')
-        if self.acquired_counter != self.trigger_count:  # Skip acquire if queue is full
+        if self.acquired_counter < self.trigger_count:  # Skip acquire if queue is full
             if self.sim:
                 sense1, sense2 = self._random_sense(vol=vol)
             else:  # Acquire from real instruments
-                if self.skip_one_sense:
-                    self.acquired_counter += 1
                 # Trigger
                 if self.trigger_needed:
                     self.logger.debug('SENSE TRIGGER')
@@ -422,21 +420,29 @@ class ITC_probe_station(GeneralDriver):
             else:
                 sense_mem = sense2
                 sense_temp = sense1
-            V = sense_mem[0::3]
-            Curr = sense_mem[1::3]
-            timestamp = self.exp_start_time + sense_mem[2::3]
+            if self.skip_one_sense:
+                step = 6  # Array step
+            else:
+                step = 3
+            V = sense_mem[0::step]
+            Curr = sense_mem[1::step]
+            timestamp = self.exp_start_time + sense_mem[2::step]
             # Temperature
             if self.enable_temperature:
-                V_temp = sense_temp[0::3]
+                V_temp = sense_temp[0::step]
                 Temp = K_volt2temp(V_temp, room_temp=float(self.settings['temperature']['room_temperature']))
             else:
                 V_temp, Temp = [np.nan] * len(V), [np.nan] * len(V)  # TODO: remove
             self.logger.debug(f'Sense_data acquired: V = {V}, curr = {Curr}, Time={timestamp}, V_temp={V_temp}, Temp={Temp}')
             for t, v, cur, tem, v_t in zip(timestamp, V, Curr, Temp, V_temp):
                 self.queue.append((t, v, cur, tem, v_t))
-            self.acquired_counter += min(len(V), len(Temp))
+            if self.skip_one_sense:
+                counter_delta = 2 * min(len(V), len(Temp))
+            else:
+                counter_delta = min(len(V), len(Temp))
+            self.acquired_counter += counter_delta
             # Checking if to much data is read on each .sense()
-            if min(len(V), len(Temp)) > 20:
+            if counter_delta > 20:
                 self.sense_size = 20  # Limiting the read size till the end of the experiment
             # Checking if reading data is finished
             if self.trigger_count - self.acquired_counter <= 20:
@@ -513,7 +519,7 @@ class ITC_probe_station(GeneralDriver):
         else:
             raise RuntimeError(f'_config_init_values: unknown mode: {mode}')
         self.trigger_count = trigger_count
-        self.acquired_counter = 0
+        self.acquired_counter = int(skip_one_sense)  # If skip_one_sense, skip first voltage pulse
         self.need_stop = False
         self.sense_size = None
         self.trigger_needed = trigger_needed

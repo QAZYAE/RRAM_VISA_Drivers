@@ -393,22 +393,23 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                         r = vol_cur / smu_cur
                 else:  # Calculate by read_control_value (voltage)
                     r = self.read_control_value / smu_cur
+            if r <= 0:
+                r = np.inf  
         else:  # Controlling current, vol_cur is current
             if smu_vol == 0:
-                r = np.inf
+                r = 0
             else:
                 if self.read_control_value is None:  # Calculate by vol_cur
                     if vol_cur is None:  # Calculate by smu current
                         r = smu_vol / smu_cur
                     else:  # Calculate by vol_cur current and smu voltage
                         if vol_cur == 0:
-                            r = np.inf
+                            r = 0
                         else:
                             r = smu_vol / vol_cur
                 else:  # Calculate by read_control_value (current)
                     r = smu_vol / self.read_control_value
-        if r <= 0:
-            r = np.inf
+            r = max(r, 0)
         return r
         
         
@@ -426,13 +427,11 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         """
         sleep_time = 0.1 * self.trigger_interval
         self.logger.debug(f'ACQUIRED_COUNTER (BEFORE): {self.acquired_counter}, (trigger_count: {self.trigger_count})')
-        if self.acquired_counter != self.trigger_count:  # Skip acquire if queue is full
+        if self.acquired_counter < self.trigger_count:  # Skip acquire if queue is full
             if self.sim:
                 sense1, sense2 = self._random_sense(vol=vol)
                 sense1_B, sense2_B = self._random_sense(include_time=False)
             else:  # Acquire from instruments
-                if self.skip_one_sense:
-                    self.acquired_counter += 1
                 # Trigger
                 if self.trigger_needed:
                     self.logger.debug(f'SENSE TRIGGER INSTRUMENT STATUS: A: {self.A.check_trigger_status()}, B: {self.B.check_trigger_status()}')
@@ -512,9 +511,15 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                 primary_sense = sense1
             else:
                 primary_sense = sense2
-            V = primary_sense[0::3]
-            Curr = primary_sense[1::3]
-            timestamp = self.exp_start_time + primary_sense[2::3]
+            if self.skip_one_sense:
+                primary_step = 6
+                secondary_step = 4
+            else:
+                primary_step = 3
+                secondary_step = 2
+            V = primary_sense[0::primary_step]
+            Curr = primary_sense[1::primary_step]
+            timestamp = self.exp_start_time + primary_sense[2::primary_step]
             # Temperature and WL
             if self.settings['ITC_1T1R']['Gate_channel'] == '1':
                 # sense_gate = sense1_B
@@ -523,16 +528,20 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                 # sense_gate = sense2_B
                 sense_temp = sense1_B
             if self.enable_temperature:
-                V_temp = sense_temp[0:len(V)*2:2]
+                V_temp = sense_temp[0:len(V)*2:secondary_step]
                 Temp = K_volt2temp(V_temp, room_temp=float(self.settings['temperature']['room_temperature']))
             else:
                 V_temp, Temp = [np.nan]*len(V), [np.nan]*len(V)
             self.logger.debug(f'Sense_data acquired: V = {V}, curr = {Curr}, Time={timestamp}, V_temp={V_temp}, Temp={Temp}')
             for t, v, cur, tem, v_t in zip(timestamp, V, Curr, Temp, V_temp):
                 self.queue.append((t, v, cur, tem, v_t))
-            self.acquired_counter += len(V)
+            if self.skip_one_sense:
+                counter_delta = 2 * len(V)
+            else:
+                counter_delta = len(V)
+            self.acquired_counter += counter_delta
             # Checking if to much data is read on each .sense()
-            if len(V) > 20:
+            if counter_delta > 20:
                 self.sense_size = 20  # Limiting the read size till the end of the experiment
             # Checking if reading data is finished
             if self.trigger_count - self.acquired_counter <= 20:
@@ -551,7 +560,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             return 'Sense queue is empty!'
         
         
-    def trigger(self, skip_acquire: bool = True, attempts: int = 200, sleep_time: float = 0.001) -> tuple[bool, str]:
+    def trigger(self, attempts: int = 200, sleep_time: float = 0.001) -> tuple[bool, str]:
         """Send immediate trigger, skip one acquire value
         
         Returns:
@@ -576,8 +585,6 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             self.save_logs()
             return False, f'.trigger(): A trigger error: {resp}'
         self.logger.debug('.trigger(): trigger sent to instrument A')
-        if skip_acquire:
-            self.acquired_counter += 1
         return True, 'Trigger was sent to the instruments'
         
         
@@ -612,7 +619,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         else:
             raise RuntimeError(f'_config_init_values: unknown mode: {mode}')
         self.trigger_count = trigger_count
-        self.acquired_counter = 0
+        self.acquired_counter = int(skip_one_sense)
         self.need_stop = False
         self.sense_size = None
         self.trigger_needed = trigger_needed

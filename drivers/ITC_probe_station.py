@@ -303,9 +303,9 @@ class ITC_probe_station(GeneralDriver):
             i2 = v2 / R2
         if include_time:
             timestamp = self.acquired_counter * self.trigger_interval
-            sense1, sense2 = [v1, i1, timestamp], [v2, i2, timestamp]
+            sense1, sense2 = [signed(v1, self.sign), signed(i1, self.sign), timestamp], [signed(v2, self.sign), signed(i2, self.sign), timestamp]
         else:
-            sense1, sense2 = [v1, i1], [v2, i2]
+            sense1, sense2 = [signed(v1, self.sign), signed(i1, self.sign)], [signed(v2, self.sign), signed(i2, self.sign)]
         return np.array(sense1), np.array(sense2)
     
     
@@ -341,9 +341,11 @@ class ITC_probe_station(GeneralDriver):
                         r = signed(vol_cur, self.sign) / smu_cur
                 else:  # Calculate by read_control_value (voltage)
                     r = self.read_control_value / smu_cur
+            if r <= 0:
+                r = np.inf  # Replace with infinity
         else:  # Controlling current, vol_cur is current
             if smu_vol == 0:
-                r = np.inf
+                r = 0
             else:
                 if self.read_control_value is None:  # Calculate by vol_cur
                     if vol_cur is None:  # Calculate by smu current
@@ -355,8 +357,7 @@ class ITC_probe_station(GeneralDriver):
                             r = smu_vol / signed(vol_cur, self.sign)
                 else:  # Calculate by read_control_value (current)
                     r = smu_vol / self.read_control_value
-        if r <= 0:
-            r = 0
+            r = max(0, r)
         return r
     
     

@@ -470,8 +470,8 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                         self.logger.warning('Sense_A: Need stop flag received!')
                         break
                     time.sleep(sleep_time)
-                self.logger.debug(f'A measurement condition: {self.A.query('status:measurement:condition?')}')
-                self.logger.debug(f'A questionable condition: {self.A.query('status:questionable:condition?')}')
+                self.logger.debug(f'A measurement condition: {self.A.query("status:measurement:condition?")}')
+                self.logger.debug(f'A questionable condition: {self.A.query("status:questionable:condition?")}')
                 if sense_data_A is None:
                     self.logger.error('Cant obtain sense_A data!')
                     self.logger.error(f'Sense A data (no arguments): {self.A.query(":sense1:data?;:sense2:data?")}')
@@ -497,8 +497,8 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                         self.logger.warning('Sense_B: Need stop flag received!')
                         break
                     time.sleep(sleep_time)
-                self.logger.debug(f'B measurement condition: {self.B.query('status:measurement:condition?')}')
-                self.logger.debug(f'B questionable condition: {self.B.query('status:questionable:condition?')}')
+                self.logger.debug(f'B measurement condition: {self.B.query("status:measurement:condition?")}')
+                self.logger.debug(f'B questionable condition: {self.B.query("status:questionable:condition?")}')
                 if sense_data_B is None:
                     self.logger.error('Cant obtain sense_B data!')
                     self.logger.error(f'Sense B data (no arguments): {self.B.query(":sense1:data?;:sense2:data?")}')

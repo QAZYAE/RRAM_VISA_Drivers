@@ -403,6 +403,8 @@ class ITC_probe_station(GeneralDriver):
                         self.logger.warning('Sense_A: Need stop flag received!')
                         break
                     time.sleep(sleep_time)
+                self.logger.debug(f'Measurement condition: {self.A.query("status:measurement:condition?")}')
+                self.logger.debug(f'Questionable condition: {self.A.query("status:questionable:condition?")}')
                 if sense_data_A is None:
                     self.logger.error('Cant obtain sense_A data!')
                     self.save_logs()

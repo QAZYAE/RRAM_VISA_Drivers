@@ -440,8 +440,12 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                         self.logger.error(f'.sense(): B is not armed! B status: {resp}')
                         return f'.sense(): B is not armed! B status: {resp}'
                     if self.skip_one_sense:
-                        r1 = self.A.trigger(channel=self.A_smu_channels)  # Trigger A
-                        time.sleep(1.1*self.trigger_interval)
+                        r1 = self.A.trigger(channel=self.A_smu_channels)  # Trigger A No 1
+                        time.sleep(self.trigger_interval)
+                        flag, resp = self.B.check_armed(channel=self.B_smu_channels)  # Check if B is ready for trigger
+                        if not flag:
+                            self.logger.error(f'.sense(), second trigger: B is not armed! B status: {resp}')
+                            return f'.sense(), second trigger: B is not armed! B status: {resp}'
                         r2 = self.A.trigger(channel=self.A_smu_channels)  # Trigger A
                         self.logger.debug('A is triggered twice')
                         for resp in [r1, r2]:
@@ -466,6 +470,8 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                         self.logger.warning('Sense_A: Need stop flag received!')
                         break
                     time.sleep(sleep_time)
+                self.logger.debug(f'A measurement condition: {self.A.query('status:measurement:condition?')}')
+                self.logger.debug(f'A questionable condition: {self.A.query('status:questionable:condition?')}')
                 if sense_data_A is None:
                     self.logger.error('Cant obtain sense_A data!')
                     self.logger.error(f'Sense A data (no arguments): {self.A.query(":sense1:data?;:sense2:data?")}')
@@ -491,6 +497,8 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                         self.logger.warning('Sense_B: Need stop flag received!')
                         break
                     time.sleep(sleep_time)
+                self.logger.debug(f'B measurement condition: {self.B.query('status:measurement:condition?')}')
+                self.logger.debug(f'B questionable condition: {self.B.query('status:questionable:condition?')}')
                 if sense_data_B is None:
                     self.logger.error('Cant obtain sense_B data!')
                     self.logger.error(f'Sense B data (no arguments): {self.B.query(":sense1:data?;:sense2:data?")}')

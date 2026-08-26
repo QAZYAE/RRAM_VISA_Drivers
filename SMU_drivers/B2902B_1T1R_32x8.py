@@ -437,14 +437,14 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
                 # Trigger
                 if self.trigger_needed:
                     self.logger.debug(f'SENSE TRIGGER INSTRUMENT STATUS: A: {self.A.check_trigger_status()}, B: {self.B.check_trigger_status()}')
-                    flag, resp = self.B.check_armed(channel=self.B_smu_channels)  # Check if B is ready for trigger
+                    flag, resp = self.B.check_armed(channel=self.B_smu_channels, wait_interval=0.01*self.trigger_interval)  # Check if B is ready for trigger
                     if not flag:
                         self.logger.error(f'.sense(): B is not armed! B status: {resp}')
                         return f'.sense(): B is not armed! B status: {resp}'
                     if self.skip_one_sense:
                         r1 = self.A.trigger(channel=self.A_smu_channels)  # Trigger A No 1
                         time.sleep(self.trigger_interval)
-                        flag, resp = self.B.check_armed(channel=self.B_smu_channels)  # Check if B is ready for trigger
+                        flag, resp = self.B.check_armed(channel=self.B_smu_channels, wait_interval=0.01*self.trigger_interval)  # Check if B is ready for trigger
                         if not flag:
                             self.logger.error(f'.sense(), second trigger: B is not armed! B status: {resp}')
                             return f'.sense(), second trigger: B is not armed! B status: {resp}'
@@ -579,7 +579,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
         """
         self.logger.debug(f'.trigger() TRIGGER INSTRUMENT STATUS: A: {self.A.check_trigger_status()}, B: {self.B.check_trigger_status()}')
         for i in range(attempts):
-            flag, resp = self.B.check_armed(channel=self.B_smu_channels)  # Check if B is ready for trigger
+            flag, resp = self.B.check_armed(channel=self.B_smu_channels, wait_interval=0.01*self.trigger_interval)  # Check if B is ready for trigger
             if not flag:
                 self.logger.debug(f'attempt {i}: .trigger(): B is not armed! B status: {resp}')
             else:
@@ -673,7 +673,7 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             resp = self.B.arm(channel=self.B_smu_channels)
             self.logger.debug(f'ARM trigger sent to B. Response: {resp}')
         else:
-            flag, resp = self.B.check_initiated(channel=self.B_smu_channels)
+            flag, resp = self.B.check_initiated(channel=self.B_smu_channels, wait_interval=0.01*self.trigger_interval)
             if flag:
                 self.logger.debug(f'B is ready. Status: {resp}')
                 resp = self.A.arm(self.A_smu_channels)

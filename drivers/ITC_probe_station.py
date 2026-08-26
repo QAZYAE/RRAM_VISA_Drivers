@@ -473,7 +473,7 @@ class ITC_probe_station(GeneralDriver):
         """
         self.logger.debug(f'.trigger() TRIGGER INSTRUMENT STATUS: A: {self.A.check_trigger_status()}')
         for i in range(attempts):
-            flag, resp = self.A.check_armed()  # Check if A is ready for trigger
+            flag, resp = self.A.check_armed(channel=self.smu_channels, wait_interval=0.01*self.trigger_interval)  # Check if A is ready for trigger
             if not flag:
                 self.logger.debug(f'.trigger(): Attempt {i}: A is not armed! A status: {resp}')
             else:
@@ -556,7 +556,7 @@ class ITC_probe_station(GeneralDriver):
         resp = self.A.initiate(channel=self.smu_channels)
         self.logger.debug(f'A initiated. Response: {resp}')
         self.logger.debug(f'.config() TRIGGER INSTRUMENT STATUS: A: {self.A.check_trigger_status()}')
-        flag, resp = self.A.check_initiated(channel=self.smu_channels)
+        flag, resp = self.A.check_initiated(channel=self.smu_channels, wait_interval=0.01*self.trigger_interval)
         if flag:
             self.logger.debug(f'A is ready. Status: {resp}')
             resp = self.A.arm(channel=self.smu_channels)

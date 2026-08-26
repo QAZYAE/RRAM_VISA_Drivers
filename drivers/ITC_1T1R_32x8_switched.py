@@ -202,6 +202,9 @@ class ITC_1T1R_32x8_switched(B2902B_1T1R_32x8_driver):
             if flag:
                 break
         if flag:
+            err_A = self.A.get_errors()  # Clearing errors
+            err_B = self.B.get_errors()
+            self.logger.debug(f'Errors after panic:\n\tA: {err_A}\n\tB: {err_B}')
             resps.append(self.A.set_output_state('on'))
             resps.append(self.B.set_output_state('on'))
             self.logger.critical('Panic resolved!')

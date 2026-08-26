@@ -299,11 +299,13 @@ class B2902B_1T1R_32x8_driver(GeneralDriver):
             if flag:
                 break
         if flag:
-            self.A.get_errors()
-            self.B.get_errors()
+            err_A = self.A.get_errors()  # Clearing errors
+            err_B = self.B.get_errors()
+            self.logger.debug(f'Errors after panic:\n\tA: {err_A}\n\tB: {err_B}')
             resps.append(self.A.set_output_state('on'))
             resps.append(self.B.set_output_state('on'))
             self.logger.critical('Panic resolved!')
+            self.logger.debug(f'Panic responces: {resps}')
         else:
             self.logger.error('Panic was not resolved!\n\t' + '\n\t'.join(resps))
         return flag, '\n'.join(resps)

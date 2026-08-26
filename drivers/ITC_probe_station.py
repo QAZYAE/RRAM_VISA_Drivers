@@ -249,7 +249,8 @@ class ITC_probe_station(GeneralDriver):
             if flag:
                 break
         if flag:
-            self.A.get_errors()
+            err_A = self.A.get_errors()  # Clearing errors
+            self.logger.debug(f'Errors after panic:\n\t{err_A}')
             resps.append(self.A.set_output_state('on'))
             self.logger.critical('Panic resolved!')
         else:

@@ -5,12 +5,15 @@
 """
 from RRAM_VISA_Drivers.drivers.ITC_1T1R_32x8_switched import ITC_1T1R_32x8_switched
 from RRAM_VISA_Drivers.core import COM
+from typing import Union
+import time
 
 
 
 class ITC_1T1R_32x8_switched_COM(ITC_1T1R_32x8_switched):
     """Driver for measuring 1T1R 32x8 crossbar arrays with a switch unit."""
     sim: str = False  # True for simulation mode
+    com_sense: bool = False  # If True, sense takes data from COM port
     
     def __init__(
         self, 
@@ -35,12 +38,17 @@ class ITC_1T1R_32x8_switched_COM(ITC_1T1R_32x8_switched):
         for address in [B2902B_1_address, B2902B_2_address, Switch_address, COM_port]:
             if address is None or address == '':
                 self.sim = True
-        super().__init__(self, B2902B_1_address, B2902B_2_address, Switch_address, VISA_library_path)
+        super().__init__(B2902B_1_address, B2902B_2_address, Switch_address, VISA_library_path)
         # Init COM port
         if self.sim:
-            self.COM = COM(port=None, braudrate=9600, timeout=None)
+            port = None
         else:
-            self.COM = COM(port=COM_port, braudrate=9600, timeout=None)
+            port = COM_port
+        self.COM = COM(
+            port = port,
+            baudrate = int(self.settings['COM']['baudrate']),
+            timeout = float(self.settings['COM']['timeout'])
+        )
         print('COM driver init success')
         self.logger.info('COM drier init success')
         
@@ -78,4 +86,40 @@ class ITC_1T1R_32x8_switched_COM(ITC_1T1R_32x8_switched):
         Returns:
             tuple[bool, str]: _description_
         """
+        flag, resp = self.COM.write(command)
+        self.com_sense = True
+        self.com_resp_type = response_type
+        self.trigger_interval = float(self.settings['COM']['read_interval'])
+        if not flag:
+            self.logger.error(f'Error while writing COM command!\nCommand: {command}\nError: {resp}')
+            return False, f'Error while writing COM command!\nCommand: {command}\nError: {resp}'
+        return True, f'Command sent to COM: {command}'
+    
+    
+    def sense(self, acquire_attempts: int = 200, vol: Union[float, None] = None) -> Union[tuple[float, float], str]:
+        """Read sense data from the instruments. Updates the result queue and returns a 
+            result from the queue.
+        
+        Args:
+            acquire_attempts (int, optional): Number of attempts to communicate with the instrument
+                and acquire sense data. Defaults to 1000.
+            trigger (bool, optional): If True, sends trigger command before acquire.
+
+        Returns:
+            resistance (float): First resistance in the queue.
+        """
+        if self.com_sense:
+            for i in range(int(self.settings['COM']['read_attempts'])):
+                flag, data = self.COM.read()
+                self.logger.debug(f'Sense COM attempt {i}: DATA: {data.decode()}')
+                if flag:
+                    break
+                time.sleep(self.trigger_interval)
+            if not flag:
+                self.logger.error(f'.sense(): COM error: {data.decode()}')
+                return f'.sense(): COM error: {data.decode()}'
+            self.logger.debug(f'COM: data acquired in {i} attempts')       
+            self.com_sense = False
+        else:
+            super().sense(acquire_attempts, vol)
         

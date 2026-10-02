@@ -17,6 +17,11 @@ _driver_instruments: dict[str: dict[str: Callable]] = {
         'B2902B-1 (BL,NL)': check_connection_B2902B,
         'B2902B-2 (WL,T)': check_connection_B2902B, 
         '34980A (Switch)': check_connection_34980A
+    },
+    'ITC_1T1R_32x8_switched_COM': {
+    'B2902B-1 (BL,NL)': check_connection_B2902B,
+    'B2902B-2 (WL,T)': check_connection_B2902B, 
+    '34980A (Switch)': check_connection_34980A
     }
 }
 

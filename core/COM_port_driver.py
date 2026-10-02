@@ -1,5 +1,5 @@
 try:
-    from serial import Serial
+    from serial import Serial, serial_for_url
 except (ModuleNotFoundError, ImportError):
     raise ModuleNotFoundError('PySerial package is not installed! Run `pip install pyserial`')
 from typing import Union
@@ -12,13 +12,15 @@ class COM:
     def __init__(
         self, 
         port: Union[str, None] = None, 
-        braudrate: int = 9600,
+        baudrate: int = 9600,
         timeout: Union[float, None] = None
     ) -> None:
         """COM port class"""
         try:
-            self.serial = Serial(port, braudrate=braudrate, timeout=timeout)
-            self.serial.open()
+            if port is None or port == '':
+                self.serial = serial_for_url('loop://', baudrate=baudrate, timeout=timeout)
+            else:
+                self.serial = Serial(port, baudrate=baudrate, timeout=timeout)
         except Exception:
             print('Ошибка открытия COM порта:')
             traceback.print_exc()

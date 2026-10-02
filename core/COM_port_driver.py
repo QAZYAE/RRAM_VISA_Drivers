@@ -3,10 +3,93 @@ try:
 except (ModuleNotFoundError, ImportError):
     raise ModuleNotFoundError('PySerial package is not installed! Run `pip install pyserial`')
 from typing import Union
+import traceback
         
 
 
 class COM:
     """Com port class"""
-    def __init__(self, port: Union[str, None] = None, braudrate: int = 9600) -> None:
-        self.serial = Serial(port, braudrate=braudrate)
+    def __init__(
+        self, 
+        port: Union[str, None] = None, 
+        braudrate: int = 9600,
+        timeout: Union[float, None] = None
+    ) -> None:
+        """COM port class"""
+        try:
+            self.serial = Serial(port, braudrate=braudrate, timeout=timeout)
+            self.serial.open()
+        except Exception:
+            print('Ошибка открытия COM порта:')
+            traceback.print_exc()
+        
+        
+    def write(self, command: str) -> tuple[bool, str]:
+        """Write a command to com port
+
+        Args:
+            command (str): Command to write.
+
+        Returns:
+            flag, response (tuple[bool, str]): Ok flag, error if occurred.
+        """
+        try:
+            resp = self.serial.write(command)
+            res_str = '' if resp else f'Could not write command: {command}'
+            return resp, res_str
+        except Exception:
+            return False, traceback.format_exc()
+        
+        
+    def read(self, size: Union[int, None] = None) -> tuple[bool, Union[bytes, str]]:
+        """Read `size` bytes from the buffer.
+
+        Args:
+            size (int | None, optional): Amount of bytes to read. If None, reads all available data. Defaults to None.
+
+        Returns:
+            flag, response (bool, bytes | str): Ok flag, Bytes read from the port (bytes) or error if occurred (str).
+        """
+        if size is None:
+            try:
+                data = self.serial.read_all()
+                return True, data
+            except Exception:
+                return False, traceback.format_exc()
+        else:
+            try:
+                data = self.serial.read(size=size)
+                return True, data
+            except Exception:
+                return False, traceback.format_exc()
+            
+    
+    def read_until(self, expected: bytes, size: Union[int, None] = None) -> bytes:
+        """Read from buffer until `expected` string is found.
+
+        Args:
+            expected (bytes): String to find.
+            size (int | None, optional): Size of the buffer to read. Defaults to None.
+
+        Returns:
+            flag, response (bool, bytes | str): Ok flag, Bytes read from the port (bytes) or error if occurred (str).
+        """
+        try:
+            data = self.serial.read_until(expected, size)
+            return True, data
+        except Exception:
+            return False, traceback.format_exc()  
+        
+        
+    def close(self) -> tuple[bool, str]:
+        """Read from buffer until `expected` string is found.
+
+        Returns:
+            flag, response (bool, bytes | str): Ok flag, error if occurred (str).
+        """
+        try: 
+            self.serial.close()
+            return True, 'COM disconnected'
+        except Exception:
+            return False, traceback.format_exc()
+        

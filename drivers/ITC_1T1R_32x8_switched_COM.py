@@ -7,6 +7,7 @@ from RRAM_VISA_Drivers.drivers.ITC_1T1R_32x8_switched import ITC_1T1R_32x8_switc
 from RRAM_VISA_Drivers.core import COM
 from typing import Union
 import time
+import numpy as np
 
 
 
@@ -93,7 +94,16 @@ class ITC_1T1R_32x8_switched_COM(ITC_1T1R_32x8_switched):
         if not flag:
             self.logger.error(f'Error while writing COM command!\nCommand: {command}\nError: {resp}')
             return False, f'Error while writing COM command!\nCommand: {command}\nError: {resp}'
-        return True, f'Command sent to COM: {command}'
+        if response_type == 'Resistance':
+            return True, f'Command sent to COM: {command}'
+        elif self.com_resp_type == 'Boolean flag':
+            self.logger.debug(f'Command sent to COM: {command}')
+            data = self.sense()
+            if int(data):
+                return True, f'Flag recieved from COM: {data}'
+            else:
+                return False, f'Got False flag from COM! Stopping the experiment'
+        
     
     
     def sense(self, acquire_attempts: int = 200, vol: Union[float, None] = None) -> Union[tuple[float, float], str]:
@@ -120,6 +130,17 @@ class ITC_1T1R_32x8_switched_COM(ITC_1T1R_32x8_switched):
                 return f'.sense(): COM error: {data.decode()}'
             self.logger.debug(f'COM: data acquired in {i} attempts')       
             self.com_sense = False
+            if self.com_resp_type == 'Resistance':
+                try:
+                    res = float(data.decode())
+                    return [res, time.time(), np.nan, np.nan, np.nan, np.nan]
+                except Exception as e:
+                    self.logger.error(f'Could not convert COM response to float: {data.decode()}: {type(e).__name__}: {e}')
+                    print(f'Could not convert COM response to float: {data.decode()}: {type(e).__name__}: {e}')
+            elif self.com_resp_type == 'Boolean flag':
+                return data.decode()
+            else:
+                raise RuntimeError('Unknown response type in COM sense')
         else:
-            super().sense(acquire_attempts, vol)
+            return super().sense(acquire_attempts, vol)
         

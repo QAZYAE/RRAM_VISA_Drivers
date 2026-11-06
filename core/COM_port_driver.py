@@ -36,7 +36,7 @@ class COM:
             flag, response (tuple[bool, str]): Ok flag, error if occurred.
         """
         try:
-            resp = self.serial.write(command)
+            resp = self.serial.write(command.encode())
             res_str = '' if resp else f'Could not write command: {command}'
             return resp, res_str
         except Exception:
@@ -55,13 +55,19 @@ class COM:
         if size is None:
             try:
                 data = self.serial.read_all()
-                return True, data
+                if data:
+                    return True, data
+                else:
+                    return False, b''
             except Exception:
                 return False, traceback.format_exc()
         else:
             try:
                 data = self.serial.read(size=size)
-                return True, data
+                if data:
+                    return True, data
+                else:
+                    return False, b''
             except Exception:
                 return False, traceback.format_exc()
             

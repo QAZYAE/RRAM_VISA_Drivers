@@ -193,3 +193,54 @@ class Keysight_34980A_1T1R_32x8(VISA_instrument):
                 self.disconnect_all()
                 return resp + ' | All MUX channels and Matrix intersections were disconnected.'
         return f'The switch type was changed to {switch_type}'
+    
+    
+    def connect_multiple_cells(self, rows: list[int], columns: list[int], switch_type: str = 'SET') -> str:
+        """Connect multiple rows or columns.
+
+        Args:
+            rows (list[int]): Rows to connect (Word Lines and Net Lines), 1 through 8.
+            columns (list[int]): Columns to connect (Bit Lines), 1 through 32.
+            switch_type (str, optional): Switch type ('SET' or 'RESET'). 
+                Used in one-SMU mode only. Defaults to 'SET'.
+
+        Returns:
+            str: Error if an error occurred.
+        """
+        self.mode = 'connected'
+        if self.sim:
+            return f'Simulation: Multiple connection: rows {rows} and columns {columns} were connected.'
+        for row in rows:
+            if f'WLNL{row}' not in self.WLNL.keys():
+                raise RuntimeError('Wrong WL number')
+        for col in columns:
+            if f'BL{col}' not in self.BL.keys():
+                raise RuntimeError('Wrong BL number')
+        resps = []
+        gnd_list = [True if v in self.WLNL.values() else False for v in range(1, 17)]
+        smu_list = [False for _ in range(16)]
+        for row in rows:
+            gnd_list[self.WLNL[f'WLNL{row}'] - 1] = False
+            smu_list[self.WLNL[f'WLNL{row}'] - 1] = True
+        resps.append(self.MAT.configure_row_and_check(self.GND_row, gnd_list))
+        resps.append(self.MAT.configure_row_and_check(self.SMU_row, smu_list))
+        if self.one_SMU:
+            switch_hi_list = [False for _ in range(16)]
+            switch_lo_list = [False for _ in range(16)]
+            if switch_type == 'SET':
+                switch_hi_list[self.switch_NL_col - 1] = True
+                switch_lo_list[self.switch_BL_col - 1] = True
+            else:
+                switch_hi_list[self.switch_BL_col - 1] = True
+                switch_lo_list[self.switch_NL_col - 1] = True
+            resps.append(self.MAT.configure_row_and_check(self.switch_hi_row, switch_hi_list))
+            resps.append(self.MAT.configure_row_and_check(self.switch_lo_row, switch_lo_list))
+        column_list = [False for _ in range(70)]
+        for col in columns:
+            column_list[self.BL[f'BL{col}'] - 1] = True
+        resps.append(self.MUX.configure_all_and_check(column_list))
+        for resp in resps:
+            if resp.startswith('ERROR') or resp.startswith('Exception'):
+                self.disconnect_all()
+                return resp + ' | All MUX channels and Matrix intersections were disconnected.'
+        return f'Multiple connection: rows {rows} and columns {columns} were connected.'

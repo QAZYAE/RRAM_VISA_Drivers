@@ -5,6 +5,7 @@ import pyvisa
 import time
 from typing import Union
 import numpy as np
+import logging
 from RRAM_VISA_Drivers.core import VISA_instrument
 from RRAM_VISA_Drivers.SMU_drivers.Keysight_SMU import SMU
 
@@ -23,7 +24,8 @@ class B2902B(VISA_instrument):
     def __init__(
         self, 
         resource: Union[pyvisa.Resource, None], 
-        instrument_name: str = 'B2902B'
+        instrument_name: str = 'B2902B',
+        scpi_logger: Union[logging.Logger, None] = None
     ) -> None:
         """Handles communicating with Keysight B2902B using pyvisa.
 
@@ -32,11 +34,12 @@ class B2902B(VISA_instrument):
                 (initiate using :meth:`pyvisa.highlevel.ResourceManager.open_resource`).
                 If resource is None, the program simulates communication.
             instrument_name (str, optional): Instrument name for responses. Defaults to 'B2902B'.
+            scpi_logger (logging.Logger | None, optional): Logger for scpi commands. Defaults to None.
         """
         IDN_response = 'Keysight Technologies,B2902B'
-        super().__init__(resource, IDN_response=IDN_response, instrument_name=instrument_name)
-        self.SMU1 = SMU(resource, channel=1, instrument_name=instrument_name, parent=self)
-        self.SMU2 = SMU(resource, channel=2, instrument_name=instrument_name, parent=self)
+        super().__init__(resource, IDN_response=IDN_response, instrument_name=instrument_name, scpi_logger=scpi_logger)
+        self.SMU1 = SMU(resource, channel=1, instrument_name=instrument_name, parent=self, scpi_logger=scpi_logger)
+        self.SMU2 = SMU(resource, channel=2, instrument_name=instrument_name, parent=self, scpi_logger=scpi_logger)
         
         
     def set_output_state(self, state: str) -> str:
@@ -434,36 +437,67 @@ class B2902B(VISA_instrument):
         return self._move_layer('trigger', channel, check_status, attempts, wait_interval)
     
     
-    def get_sense_data(self, offset: int = 0) -> Union[tuple[np.ndarray], str, None]:
+    def get_sense_data(
+            self, 
+            channels: str = '1,2', 
+            offset: int = 0, 
+            size: Union[int, None] = None
+        ) -> Union[tuple[np.ndarray], str, None]:
         """Return the array data for both channels, format is specified by B2902B.set_data_format().
         The data is not cleared until the .initiate() method is executed.
 
         Args:
+            channels (str, optional): Channels to read, separeted by comma. Defaults to '1,2'.
             offset (int, optional): Indicates the beginning of the data received. The index is from 
                 0 to maximum (depends on the buffer state). Defaults to 0 (All data is received).
                 If offset is `-1`, latest data entry is received.
+            size (int | None, optional): Size of the buffer to read (starting from `offset`). If `size`
+                is None, the function reads all available data in the buffer. Default to None.
 
         Returns:
             data (tuple[np.ndarray] | str | None): Data specified by B2902B.set_data_format().
                 Returns error if an error occurred, returns None is the buffer is empty.
+                If only one channel is specified, returns tuple where array with specified channel's
+                data is on the channel number place.
         """
         if not isinstance(offset, int) or offset < -1:
             return f'ERROR: {self.resp} invalid offset.'
-        lat = ':latest' if offset == -1 else ''
-        if offset == 0 or offset == -1:
+        if str(channels) not in ['1', '2', '1,2']:
+            return f'ERROR: {self.resp} wrong channel specified: "{channels}"'
+        if offset == -1:
+            lat = ':latest'
             off = ''
         else:
+            lat = ''
             off = f' {offset}'
-        flag, response = self.query_resp(f'sense1:data{lat}?{off};:sense2:data{lat}?{off}', 'Getting sense data')
+        if size is not None and offset != -1:
+            if not (isinstance(size, int) and size > 0):
+                return f'ERROR: {self.resp} invalid size.'
+            siz = f',{size}'
+        else:
+            siz = ''
+        if channels == '1,2':
+            flag, response = self.query_resp(f'sense1:data{lat}?{off}{siz};:sense2:data{lat}?{off}{siz}', 'Getting sense data')
+        else:
+            flag, response = self.query_resp(f'sense{channels}:data{lat}?{off}{siz}', 'Getting sense data')
         if flag:
-            s1, s2 = response.split(';')
-            arr1 = np.array(s1.split(','), dtype=float)
-            arr2 = np.array(s2.split(','), dtype=float)
-            if (arr1[0] in [9.91e+37, 9.90e+37, 9.90e-37] or
-                arr2[0] in [9.91e+37, 9.90e+37, 9.90e-37]):
-                # print('b2920b_get_sense()', arr1, arr2)
-                return None
-            return arr1, arr2
+            if channels == '1,2':
+                s1, s2 = response.split(';')
+                arr1 = np.array(s1.split(','), dtype=float)
+                arr2 = np.array(s2.split(','), dtype=float)
+                if (arr1[0] in [9.91e+37, 9.90e+37, 9.90e-37] or
+                    arr2[0] in [9.91e+37, 9.90e+37, 9.90e-37]):
+                    # print('b2920b_get_sense()', arr1, arr2)
+                    return None
+                return arr1, arr2
+            else:
+                arr = np.array(response.split(','), dtype=float)
+                if arr[0] in [9.91e+37, 9.90e+37, 9.90e-37]:
+                    return None
+                if str(channels) == '1':
+                    return arr, []
+                else:
+                    return [], arr
         return response
     
     

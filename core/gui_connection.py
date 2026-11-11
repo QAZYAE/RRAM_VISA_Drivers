@@ -1,35 +1,8 @@
 """
 Functions for GUI connection
 """
-from typing import Callable
 import pyvisa
 
-
-
-_driver_instruments: dict[str: dict[str: Callable]] = {}
-
-
-
-def set_driver_instruments(driver_name: str, instruments: dict) -> None:
-    """Set list of instruments names required for the driver
-
-    Args:
-        driver_name (str): Driver name.
-        instruments (dict): List of instruments.
-    """
-    _driver_instruments[driver_name] = instruments
-
-
-def get_driver_instruments(driver_name: str) -> dict:
-    """Get list of instruments names required for the driver
-
-    Args:
-        driver_name (str): Driver name.
-
-    Returns:
-        Instruments (dict): Dict: {instrument_name (str): check_connection_function(visa_address: str, visa_library_path: str)}
-    """
-    return _driver_instruments[driver_name]
 
 
 def update_visa_instruments_list(visa_library_path: str = '') -> list:

@@ -1,2 +1,3 @@
+from RRAM_VISA_Drivers.SMU_drivers.Keysight_SMU import SMU as Keysight_SMU
 from RRAM_VISA_Drivers.SMU_drivers.Keysight_B2902B import B2902B
 from RRAM_VISA_Drivers.SMU_drivers.B2902B_1T1R_32x8 import B2902B_1T1R_32x8_driver

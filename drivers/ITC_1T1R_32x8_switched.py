@@ -8,22 +8,6 @@ import pyvisa
 import os
 from RRAM_VISA_Drivers.SMU_drivers import B2902B_1T1R_32x8_driver
 from RRAM_VISA_Drivers.Switch_drivers import Keysight_34980A_1T1R_32x8
-from RRAM_VISA_Drivers.core.gui_connection import (
-    set_driver_instruments, 
-    check_connection_B2902B,
-    check_connection_34980A
-)
-
-
-
-set_driver_instruments(
-    driver_name='ITC_1T1R_32x8_switched', 
-    instruments={
-        'B2902B-1 (BL,NL)': check_connection_B2902B,
-        'B2902B-2 (WL,T)': check_connection_B2902B, 
-        '34980A (Switch)': check_connection_34980A
-    }
-)
  
 
 
@@ -75,6 +59,7 @@ class ITC_1T1R_32x8_switched(B2902B_1T1R_32x8_driver):
             config_path=os.path.join(self.drivers_path, 'Switch_drivers', 'config', 'Keysight_34980A_1T1R_32x8.json')
         )
         print('ITC_1T1R_32x8_switched init success')
+        self.logger.info('ITC_1T1R_32x8_switched init success')
         
         
     def get_tech_data(self) -> str:
@@ -102,8 +87,29 @@ class ITC_1T1R_32x8_switched(B2902B_1T1R_32x8_driver):
             flag, response (tuple[bool, str]): Connected flag (True if the cell was
             successfully disconnected), response or error.
         """
+        self.logger.info(f'Connecting cell {wl}-{bl}')
         resp = self.switch.connect_cell(row=wl+1, column=bl+1)
         if resp.startswith('ERROR'):
+            self.logger.error(f'Error connecting cell {wl}-{bl}: {resp}')
+            return False, resp
+        return True, resp
+    
+    
+    def connect_multiple_cells(self, wl: list[int], bl: list[int]) -> tuple[bool, str]:
+        """Connect multiple cells via switch unit. wl and bl are 0 through 7 and 0 through 31.
+
+        Args:
+            wl (list[int]): Word Lines to connect (0 through 7).
+            bl (list[int]): Bit Lines to connect (0 through 31).
+
+        Returns:
+            flag, response (tuple[bool, str]): Connected flag (True if the cell was
+            successfully disconnected), response or error.
+        """
+        self.logger.info(f'Connecting multiple cells: rows: {wl}, columns: {bl}')
+        resp = self.switch.connect_multiple_cells(rows=[row+1 for row in wl], columns=[col+1 for col in bl])
+        if resp.startswith('ERROR'):
+            self.logger.error(f'Error connecting multiple cells: rows {wl}, columns: {bl}:\n{resp}')
             return False, resp
         return True, resp
         
@@ -117,7 +123,7 @@ class ITC_1T1R_32x8_switched(B2902B_1T1R_32x8_driver):
         """
         resps = []  # Response list
         resps.append(self.switch.disconnect_all())
-        flag, r = super().disconnect()
+        _flag, r = super().disconnect()
         resps.append(r)
         # Closing resource manager
         if not self.sim:
@@ -128,37 +134,52 @@ class ITC_1T1R_32x8_switched(B2902B_1T1R_32x8_driver):
         # Checking errors
         for r in resps:
             if r.startswith('ERROR'):
+                self.logger.critical(f'Could not disconnect the instruments!\n\t{r}')
                 return False, r
+        self.logger.info('VISA-instruments were disconnected')
         return True, 'VISA-instruments were disconnected'
     
     
-    def standby(self) -> tuple[bool, str]:
+    def standby(self, no_matrix: bool = False) -> tuple[bool, str]:
         """Turns on Standby mode and clears all instruments.
+
+        Args: 
+            no_matrix (bool, optional): If True, the standby DOES NOT CLOSE SWITCH CHANNELS, cell stays connected
+                to the SMUs. Defaults to False.
 
         Returns:
             flag, response (tuple[bool, str]): Standby flag (True if standby mode
             was turned on successfully), response or error.
         """
         flag1, r1 = super().standby()
-        r2 = self.switch.standby()
+        if no_matrix:
+            r2 = 'The switch unit will not be disconnected: no_matrix argument passed.'
+        else:
+            r2 = self.switch.standby()
         if r2.startswith('ERROR'):
             flag2 = False
         else:
             flag2 = True
         flag = flag1 and flag2
         if flag:
+            self.logger.info('Instruments are in standby mode')
             return True, 'Instruments are in standby mode'
+        self.logger.error(f'Standby error: {r1}\n{r2}')
         return False, f'{r1}\n{r2}'
     
     
-    def _panic_attempt(self) -> tuple[bool, str]:
+    def _panic_attempt(self, no_matrix: bool = False) -> tuple[bool, str]:
         """Panic once to immediately stop the experiment.
+
+        Args: 
+            no_matrix (bool, optional): If True, the panic DOES NOT CLOSE SWITCH CHANNELS, cell stays connected
+                to the SMUs. Defaults to False.
 
         Returns:
             flag, response (tuple[bool, str]): Resolved flag (True if panic was resolved), 
             response or error.
         """
-        flag, resp = self.standby()
+        flag, resp = self.standby(no_matrix)
         resps = [resp]  # Response list
         if not flag:
             resps.append(self.A.clear())
@@ -166,31 +187,44 @@ class ITC_1T1R_32x8_switched(B2902B_1T1R_32x8_driver):
             resps.append(self.A.set_output_state('off'))
             resps.append(self.B.set_output_state('off'))
         for smu in [self.A.SMU1, self.A.SMU2, self.B.SMU1]:
-            resps.append(smu.set_base_voltage_immediate(0, current_compliance=1e-8))
+            resps.append(smu.set_base_output_level_immediate(0, compliance=1e-8))
+        self.logger.debug('\t' + '\t\n'.join(resps))
         for r in resps:
             if r.startswith('ERROR'):
                 flag = False
-        if not flag:
+                self.logger.info('Panic attempt failed!')
+        if not flag and not no_matrix:
             resps.append(self.switch.standby())
         return flag, '\n'.join(resps)
         
         
-    def panic(self) -> tuple[bool, str]:
+    def panic(self, no_matrix: bool = False) -> tuple[bool, str]:
         """Panic mode for immediately stopping the experiment.
+
+        Args: 
+            no_matrix (bool, optional): If True, the panic DOES NOT CLOSE SWITCH CHANNELS, cell stays connected
+                to the SMUs. Defaults to False.
 
         Returns:
             flag, response (tuple[bool, str]): Resolved flag (True if panic was resolved), 
             response or error.
         """
         resps = []
-        for _ in range(5):
-            flag, response = self._panic_attempt()
+        for i in range(5):
+            self.logger.debug(f'Panic attempt {i}')
+            flag, response = self._panic_attempt(no_matrix)
             resps.append(response)
             if flag:
                 break
         if flag:
+            err_A = self.A.get_errors()  # Clearing errors
+            err_B = self.B.get_errors()
+            self.logger.debug(f'Errors after panic:\n\tA: {err_A}\n\tB: {err_B}')
             resps.append(self.A.set_output_state('on'))
             resps.append(self.B.set_output_state('on'))
+            self.logger.critical('Panic resolved!')
+        else:
+            self.logger.error('Panic was not resolved!\n\t' + '\n\t'.join(resps))
         return flag, '\n'.join(resps)
     
     

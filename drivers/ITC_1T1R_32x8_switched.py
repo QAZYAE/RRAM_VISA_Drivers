@@ -140,15 +140,22 @@ class ITC_1T1R_32x8_switched(B2902B_1T1R_32x8_driver):
         return True, 'VISA-instruments were disconnected'
     
     
-    def standby(self) -> tuple[bool, str]:
+    def standby(self, no_matrix: bool = False) -> tuple[bool, str]:
         """Turns on Standby mode and clears all instruments.
+
+        Args: 
+            no_matrix (bool, optional): If True, the standby DOES NOT CLOSE SWITCH CHANNELS, cell stays connected
+                to the SMUs. Defaults to False.
 
         Returns:
             flag, response (tuple[bool, str]): Standby flag (True if standby mode
             was turned on successfully), response or error.
         """
         flag1, r1 = super().standby()
-        r2 = self.switch.standby()
+        if no_matrix:
+            r2 = 'The switch unit will not be disconnected: no_matrix argument passed.'
+        else:
+            r2 = self.switch.standby()
         if r2.startswith('ERROR'):
             flag2 = False
         else:
@@ -161,14 +168,18 @@ class ITC_1T1R_32x8_switched(B2902B_1T1R_32x8_driver):
         return False, f'{r1}\n{r2}'
     
     
-    def _panic_attempt(self) -> tuple[bool, str]:
+    def _panic_attempt(self, no_matrix: bool = False) -> tuple[bool, str]:
         """Panic once to immediately stop the experiment.
+
+        Args: 
+            no_matrix (bool, optional): If True, the panic DOES NOT CLOSE SWITCH CHANNELS, cell stays connected
+                to the SMUs. Defaults to False.
 
         Returns:
             flag, response (tuple[bool, str]): Resolved flag (True if panic was resolved), 
             response or error.
         """
-        flag, resp = self.standby()
+        flag, resp = self.standby(no_matrix)
         resps = [resp]  # Response list
         if not flag:
             resps.append(self.A.clear())
@@ -182,13 +193,17 @@ class ITC_1T1R_32x8_switched(B2902B_1T1R_32x8_driver):
             if r.startswith('ERROR'):
                 flag = False
                 self.logger.info('Panic attempt failed!')
-        if not flag:
+        if not flag and not no_matrix:
             resps.append(self.switch.standby())
         return flag, '\n'.join(resps)
         
         
-    def panic(self) -> tuple[bool, str]:
+    def panic(self, no_matrix: bool = False) -> tuple[bool, str]:
         """Panic mode for immediately stopping the experiment.
+
+        Args: 
+            no_matrix (bool, optional): If True, the panic DOES NOT CLOSE SWITCH CHANNELS, cell stays connected
+                to the SMUs. Defaults to False.
 
         Returns:
             flag, response (tuple[bool, str]): Resolved flag (True if panic was resolved), 
@@ -197,7 +212,7 @@ class ITC_1T1R_32x8_switched(B2902B_1T1R_32x8_driver):
         resps = []
         for i in range(5):
             self.logger.debug(f'Panic attempt {i}')
-            flag, response = self._panic_attempt()
+            flag, response = self._panic_attempt(no_matrix)
             resps.append(response)
             if flag:
                 break

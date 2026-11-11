@@ -233,8 +233,11 @@ class ITC_probe_station(GeneralDriver):
         return flag, '\n'.join(resps)
     
     
-    def panic(self) -> tuple[bool, str]:
+    def panic(self, no_matrix: bool = False) -> tuple[bool, str]:
         """Panic mode for immediately stopping the experiment.
+
+        Args: 
+            no_matrix (bool, optional): Useless argument used for compatibility with Switched drivers.
 
         Returns:
             flag, response (tuple[bool, str]): Resolved flag (True if panic was resolved), 
